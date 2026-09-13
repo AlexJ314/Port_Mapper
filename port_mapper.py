@@ -501,9 +501,11 @@ def make_node(hostname, server):
 
     for (pp, connections) in SERVER.get(hostname).get("NETSTAT").items():
         for connection in connections:
-            name = " "
-            if int(port := connection.get("LOCAL_PORT")) < EPHEMERAL:
-                name = port
+            name = (port := connection.get("LOCAL_PORT"))
+            if int(port) >= EPHEMERAL:
+                name = f"<i>{name}</i>"
+            else:
+                name = f"<b>{name}</b>"
             ret += f"  {connection.get("PORT_TYPE")} \"{name}\" as p_{puml_name_safe(hostname)}_{puml_name_safe(port)}_{puml_name_safe(connection.get("PROTO"))}\n"
 
     return ret
@@ -521,9 +523,11 @@ def make_unknown_node(hostname, server):
     ret = f"node \"{puml_safe(hostname)}\" as n_{puml_name_safe(hostname)} {{\n"
 
     for (pp, details) in server.items():
-        name = " "
-        if (port := details.get("LOCAL_PORT")) not in ("*",) and int(port) < EPHEMERAL:
-            name = port
+        name = (port := details.get("LOCAL_PORT"))
+        if int(port) >= EPHEMERAL:
+            name = f"<i>{name}</i>"
+        else:
+            name = f"<b>{name}</b>"
         ret += f"  {details.get("PORT_TYPE")} \"{name}\" as p_{puml_name_safe(hostname)}_{puml_name_safe(port)}_{puml_name_safe(details.get("PROTO"))}\n"
 
     return ret
