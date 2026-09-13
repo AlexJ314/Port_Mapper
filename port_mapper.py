@@ -14,7 +14,7 @@
 #   ps -ef > %COMPUTERNAME%_ps.txt
 
 
-import io, os, re, json, argparse, shlex
+import io, os, re, argparse, shlex
 
 
 
@@ -575,7 +575,7 @@ def end_unknown_node(hostname, server):
 def make_process(hostname, name, args):
     ''' How to start a process '''
 
-    return f"  component \"{puml_safe(name)}\" as {process_name(hostname, name, args)} {{\n"
+    return f"  component \"{puml_safe(name)}\" as {process_name(hostname, name, args)} {{"
 
 
 def end_process(hostname, name, args):
@@ -593,7 +593,7 @@ def make_args(hostname, name, args):
     if len(args) > 1:
         ret += f"      {args}\n"
     else:
-        ret += f"{puml_safe(name)}\n"
+        ret += f"      {puml_safe(name)}\n"
     ret += "    ]"
 
     return ret
