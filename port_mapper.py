@@ -346,15 +346,19 @@ def map_servers():
                 if proc.get("CONNECTIONS") is None:
                     proc.update({"CONNECTIONS" : []})
                 conn = proc.get("CONNECTIONS")
-                portout = None
+                port = None
                 portin = None
-                if detail.get("STATE") in ("listening", "listen") or detail.get("REMOTE_PORT") in ("*", "0"):
+                portout = None
+                if detail.get("STATE") in ("listening", "listen", "syn_received", "syn_recv") or detail.get("REMOTE_PORT") in ("*", "0"):
                     portin = detail.get("LOCAL_PORT")
-                else:
+                elif detail.get("STATE") in ("syn_send", "syn_sent"):
                     portout = detail.get("LOCAL_PORT")
+                else:
+                    port = detail.get("LOCAL_PORT")
                 conn.append({
-                    "PORTOUT" : portout,
+                    "PORT" : port,
                     "PORTIN" : portin,
+                    "PORTOUT" : portout,
                     "PROTO" : detail.get("PROTO"),
                     "REMOTE_HOST" : get_dns(hostname, detail.get("REMOTE_HOST")),
                     "REMOTE_PORT" : detail.get("REMOTE_PORT"),
