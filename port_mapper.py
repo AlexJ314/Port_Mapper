@@ -406,6 +406,7 @@ def map_servers():
                     continue
                 conn = proc.setdefault("CONNECTIONS", [])
                 conn.append({
+                    "LOCAL_HOST" : get_dns(hostname, detail.get("LOCAL_HOST"), detail.get("LOCAL_PORT"), detail.get("PROTO")),
                     "LOCAL_PORT" : detail.get("LOCAL_PORT"),
                     "PORT_TYPE" : detail.get("PORT_TYPE"),
                     "PROTO" : detail.get("PROTO"),
@@ -536,8 +537,8 @@ def make_node(hostname, server):
                 name = f"<i>{name}</i>"
             else:
                 name = f"<b>{name}</b>"
-            ret += f"  {connection.get("PORT_TYPE")} \" \" as {port_name(hostname, port, connection.get("PROTO"))}\n"
             ret += f"  label \"{name}\" as {label_name(hostname, port, connection.get("PROTO"))}\n"
+            ret += f"  {connection.get("PORT_TYPE")} \" \" as {port_name(hostname, port, connection.get("PROTO"))}\n"
 
     return ret
 
@@ -559,8 +560,8 @@ def make_unknown_node(hostname, server):
             name = f"<i>{name}</i>"
         else:
             name = f"<b>{name}</b>"
-        ret += f"  {connections.get("PORT_TYPE")} \" \" as {port_name(hostname, port, connections.get("PROTO"))}\n"
         ret += f"  label \"{name}\" as {label_name(hostname, port, connections.get("PROTO"))}\n"
+        ret += f"  {connections.get("PORT_TYPE")} \" \" as {port_name(hostname, port, connections.get("PROTO"))}\n"
 
     return ret
 
@@ -635,6 +636,13 @@ def connection_type(conn, priority=2, hidden=False):
     if conn.get("PROTO") not in ("tcp","tcp6",):
         style.append("dashed")
 
+    for c in conn.get("REMOTE_HOST"):
+        if c not in conn.get("LOCAL_HOST") and "#blue" not in style:
+            style.append("#blue")
+
+    if (state := conn.get("STATE")) in ("listen","listening",):
+        style.append("#green")
+
     style = ",".join(style)
     if len(style) > 0:
         style = f"[{style}]"
@@ -650,7 +658,7 @@ def make_connection(hostname, proc, args, conn):
     local_port = conn.get("LOCAL_PORT")
 
     connections.append((f"{arg_name(hostname, proc, args)}"
-                        f"{connection_type(conn, priority=3)}"
+                        f"{connection_type(conn, priority=2)}"
                         f"{label_name(hostname, local_port, conn.get("PROTO"))}"))
 
     connections.append((f"{label_name(hostname, local_port, conn.get("PROTO"))}"
