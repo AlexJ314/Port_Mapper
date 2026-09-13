@@ -37,6 +37,12 @@ pip-log.txt
 pip-delete-this-directory.txt
 *.txt
 *.json
+*.jar
+*.png
+*.svg
+*.puml
+*.cmd
+*.bat
 
 # Unit test / coverage reports
 htmlcov/
