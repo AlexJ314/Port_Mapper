@@ -518,6 +518,12 @@ def port_name(hostname, port, proto):
     return f"p_{puml_name_safe(hostname)}_{puml_name_safe(port)}_{puml_name_safe(proto)}"
 
 
+def label_name(hostname, port, proto):
+    ''' Return puml label name '''
+
+    return f"l_{puml_name_safe(hostname)}_{puml_name_safe(port)}_{puml_name_safe(proto)}"
+
+
 def make_node(hostname, server):
     ''' How to start a node '''
 
@@ -530,7 +536,8 @@ def make_node(hostname, server):
                 name = f"<i>{name}</i>"
             else:
                 name = f"<b>{name}</b>"
-            ret += f"  {connection.get("PORT_TYPE")} \"{name}\" as {port_name(hostname, port, connection.get("PROTO"))}\n"
+            ret += f"  {connection.get("PORT_TYPE")} \" \" as {port_name(hostname, port, connection.get("PROTO"))}\n"
+            ret += f"  label \"{name}\" as {label_name(hostname, port, connection.get("PROTO"))}\n"
 
     return ret
 
@@ -546,13 +553,14 @@ def make_unknown_node(hostname, server):
 
     ret = f"node \"{puml_safe(hostname)}\" as {node_name(hostname)} {{\n"
 
-    for (pp, details) in server.items():
-        name = (port := details.get("LOCAL_PORT"))
+    for (pp, connections) in server.items():
+        name = (port := connections.get("LOCAL_PORT"))
         if int(port) >= EPHEMERAL:
             name = f"<i>{name}</i>"
         else:
             name = f"<b>{name}</b>"
-        ret += f"  {details.get("PORT_TYPE")} \"{name}\" as {port_name(hostname, port, details.get("PROTO"))}\n"
+        ret += f"  {connections.get("PORT_TYPE")} \" \" as {port_name(hostname, port, connections.get("PROTO"))}\n"
+        ret += f"  label \"{name}\" as {label_name(hostname, port, connections.get("PROTO"))}\n"
 
     return ret
 
@@ -580,10 +588,12 @@ def make_args(hostname, name, args):
 
     ret = f"    card {arg_name(hostname, name, args)}"
     args = puml_safe(args)
+    ret += " [\n"
     if len(args) > 1:
-        ret += " [\n"
         ret += f"      {args}\n"
-        ret += "    ]"
+    else:
+        ret += f"{puml_safe(name)}\n"
+    ret += "    ]"
 
     return ret
 
@@ -594,7 +604,7 @@ def end_args(hostname, name, args):
     return ""
 
 
-def connection_type(conn, priority=2):
+def connection_type(conn, priority=2, hidden=False):
     ''' What the arrows look like '''
 
     line_start = "-"
@@ -602,6 +612,9 @@ def connection_type(conn, priority=2):
     arrow_start = ""
     arrow_end = ""
     style = []
+
+    if hidden:
+        style.append("hidden")
 
     if priority > 2:
         line_start = '-' * (priority - 1)
@@ -638,6 +651,10 @@ def make_connection(hostname, proc, args, conn):
 
     connections.append((f"{arg_name(hostname, proc, args)}"
                         f"{connection_type(conn, priority=3)}"
+                        f"{label_name(hostname, local_port, conn.get("PROTO"))}"))
+
+    connections.append((f"{label_name(hostname, local_port, conn.get("PROTO"))}"
+                        f"{connection_type(conn, priority=2)}"
                         f"{port_name(hostname, local_port, conn.get("PROTO"))}"))
 
     for remote_host in conn.get("REMOTE_HOST"):

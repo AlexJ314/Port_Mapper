@@ -43,6 +43,7 @@ pip-delete-this-directory.txt
 *.puml
 *.cmd
 *.bat
+*.zip
 
 # Unit test / coverage reports
 htmlcov/
