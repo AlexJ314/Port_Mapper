@@ -494,10 +494,34 @@ def puml_safe(string, unicode=True):
     return ret
 
 
+def node_name(hostname):
+    ''' Return puml node name '''
+
+    return f"n_{puml_name_safe(hostname)}"
+
+
+def process_name(hostname, name, args):
+    ''' Return puml process name '''
+
+    return f"c_{puml_name_safe(hostname)}_{puml_name_safe(name)}"
+
+
+def arg_name(hostname, name, args):
+    ''' Return puml arg name '''
+
+    return f"cd_{puml_name_safe(hostname)}_{puml_name_safe(name)}_{puml_name_safe(hash(args))}"
+
+
+def port_name(hostname, port, proto):
+    ''' Return puml port name '''
+
+    return f"p_{puml_name_safe(hostname)}_{puml_name_safe(port)}_{puml_name_safe(proto)}"
+
+
 def make_node(hostname, server):
     ''' How to start a node '''
 
-    ret = f"node \"{puml_safe(hostname)}\" as n_{puml_name_safe(hostname)} {{\n"
+    ret = f"node \"{puml_safe(hostname)}\" as {node_name(hostname)} {{\n"
 
     for (pp, connections) in SERVER.get(hostname).get("NETSTAT").items():
         for connection in connections:
@@ -506,7 +530,7 @@ def make_node(hostname, server):
                 name = f"<i>{name}</i>"
             else:
                 name = f"<b>{name}</b>"
-            ret += f"  {connection.get("PORT_TYPE")} \"{name}\" as p_{puml_name_safe(hostname)}_{puml_name_safe(port)}_{puml_name_safe(connection.get("PROTO"))}\n"
+            ret += f"  {connection.get("PORT_TYPE")} \"{name}\" as {port_name(hostname, port, connection.get("PROTO"))}\n"
 
     return ret
 
@@ -520,7 +544,7 @@ def end_node(hostname, server):
 def make_unknown_node(hostname, server):
     ''' How to start an unknown node '''
 
-    ret = f"node \"{puml_safe(hostname)}\" as n_{puml_name_safe(hostname)} {{\n"
+    ret = f"node \"{puml_safe(hostname)}\" as {node_name(hostname)} {{\n"
 
     for (pp, details) in server.items():
         name = (port := details.get("LOCAL_PORT"))
@@ -528,7 +552,7 @@ def make_unknown_node(hostname, server):
             name = f"<i>{name}</i>"
         else:
             name = f"<b>{name}</b>"
-        ret += f"  {details.get("PORT_TYPE")} \"{name}\" as p_{puml_name_safe(hostname)}_{puml_name_safe(port)}_{puml_name_safe(details.get("PROTO"))}\n"
+        ret += f"  {details.get("PORT_TYPE")} \"{name}\" as {port_name(hostname, port, details.get("PROTO"))}\n"
 
     return ret
 
@@ -542,7 +566,7 @@ def end_unknown_node(hostname, server):
 def make_process(hostname, name, args):
     ''' How to start a process '''
 
-    return f"  component \"{puml_safe(name)}\" as c_{puml_name_safe(hostname)}_{puml_name_safe(name)} {{"
+    return f"  component \"{puml_safe(name)}\" as {process_name(hostname, name, args)} {{\n"
 
 
 def end_process(hostname, name, args):
@@ -554,7 +578,7 @@ def end_process(hostname, name, args):
 def make_args(hostname, name, args):
     ''' How to start args '''
 
-    ret = f"    card cd_{puml_name_safe(hostname)}_{puml_name_safe(name)}_{puml_name_safe(hash(args))}"
+    ret = f"    card {arg_name(hostname, name, args)}"
     args = puml_safe(args)
     if len(args) > 1:
         ret += " [\n"
@@ -612,15 +636,15 @@ def make_connection(hostname, proc, args, conn):
 
     local_port = conn.get("LOCAL_PORT")
 
-    connections.append((f"cd_{puml_name_safe(hostname)}_{puml_name_safe(proc)}_{puml_name_safe(hash(args))}"
-                       f"{connection_type(conn, priority=3)}"
-                       f"p_{puml_name_safe(hostname)}_{puml_name_safe(local_port)}_{puml_name_safe(conn.get("PROTO"))}"))
+    connections.append((f"{arg_name(hostname, proc, args)}"
+                        f"{connection_type(conn, priority=3)}"
+                        f"{port_name(hostname, local_port, conn.get("PROTO"))}"))
 
     for remote_host in conn.get("REMOTE_HOST"):
         if (remote_port := conn.get("REMOTE_PORT")) not in ('*', '0'):
-            connections.append((f"p_{puml_name_safe(hostname)}_{puml_name_safe(local_port)}_{puml_name_safe(conn.get("PROTO"))}"
+            connections.append((f"{port_name(hostname, local_port, conn.get("PROTO"))}"
                                 f"{connection_type(conn, priority=-1)}"
-                                f"p_{puml_name_safe(remote_host)}_{puml_name_safe(remote_port)}_{puml_name_safe(conn.get("PROTO"))}"))
+                                f"{port_name(remote_host, remote_port, conn.get("PROTO"))}"))
 
     return "\n".join(connections)
 
