@@ -31,6 +31,7 @@ def main(args):
     setup(args)
     read_files()
     map_servers()
+    #print(json.dumps(SERVER_MAP, indent=2))
 
 
 def setup(args):
@@ -250,13 +251,11 @@ def parse_linux_netstat(host, line):
         "TIMER" : timer,
     }
 
-    if SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}") is not None and MATCHER.get("BAD_IP").fullmatch(remote_host):
-        # print(f"Not overwriting `{SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}")}` with `{new_val}`")
-        return matched
+    if SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}") is None:
+        SERVER.get(host).get("NETSTAT").update({f"{local_port}_{proto}" : []})
 
-    SERVER.get(host).get("NETSTAT").update({
-        f"{local_port}_{proto}" : new_val,
-    })
+    SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}").append(new_val)
+
     return matched
 
 
@@ -324,13 +323,11 @@ def parse_windows_netstat(host, line):
         "PID" : pid,
     }
 
-    if SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}") is not None and MATCHER.get("BAD_IP").fullmatch(remote_host):
-        # print(f"Not overwriting `{SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}")}` with `{new_val}`")
-        return matched
+    if SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}") is None:
+        SERVER.get(host).get("NETSTAT").update({f"{local_port}_{proto}" : []})
 
-    SERVER.get(host).get("NETSTAT").update({
-        f"{local_port}_{proto}" : new_val,
-    })
+    SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}").append(new_val)
+
     return matched
 
 
@@ -338,29 +335,31 @@ def map_servers():
     ''' Map how servers communicate '''
 
     for (hostname, server) in SERVER.items():
-        for (pp, detail) in server.get("NETSTAT").items():
-            pid = detail.get("PID")
-            if pid is None:
-                continue
-            proc = server.get("PS").get(pid)
-            if proc is None:
-                continue
-            if proc.get("CONNECTIONS") is None:
-                proc.update({"CONNECTIONS" : []})
-            conn = proc.get("CONNECTIONS")
-            portout = None
-            portin = None
-            if detail.get("STATE") in ("listening", "listen") or detail.get("REMOTE_PORT") in ("*", "0"):
-                portin = detail.get("LOCAL_PORT")
-            else:
-                portout = detail.get("LOCAL_PORT")
-            conn.append({
-                "PORTOUT" : portout,
-                "PORTIN" : portin,
-                "PROTO" : detail.get("PROTO"),
-                "REMOTE_HOST" : get_dns(hostname, detail.get("REMOTE_HOST")),
-                "REMOTE_PORT" : detail.get("REMOTE_PORT"),
-            })
+        for (pp, details) in server.get("NETSTAT").items():
+            for detail in details:
+                pid = detail.get("PID")
+                if pid is None:
+                    continue
+                proc = server.get("PS").get(pid)
+                if proc is None:
+                    continue
+                if proc.get("CONNECTIONS") is None:
+                    proc.update({"CONNECTIONS" : []})
+                conn = proc.get("CONNECTIONS")
+                portout = None
+                portin = None
+                if detail.get("STATE") in ("listening", "listen") or detail.get("REMOTE_PORT") in ("*", "0"):
+                    portin = detail.get("LOCAL_PORT")
+                else:
+                    portout = detail.get("LOCAL_PORT")
+                conn.append({
+                    "PORTOUT" : portout,
+                    "PORTIN" : portin,
+                    "PROTO" : detail.get("PROTO"),
+                    "REMOTE_HOST" : get_dns(hostname, detail.get("REMOTE_HOST")),
+                    "REMOTE_PORT" : detail.get("REMOTE_PORT"),
+                    "STATE" : detail.get("STATE"),
+                })
 
     for (hostname, server) in SERVER.items():
         if SERVER_MAP.get(hostname) is None:
