@@ -570,14 +570,19 @@ def end_args(hostname, name, args):
     return ""
 
 
-def connection_type(conn):
+def connection_type(conn, priority=2):
     ''' What the arrows look like '''
 
-    line_start = "---"
+    line_start = "-"
     line_end = "-"
     arrow_start = ""
     arrow_end = ""
     style = []
+
+    if priority > 2:
+        line_start = '-' * (priority - 1)
+    elif priority < 1:
+        style.append("norank")
 
     if (state := conn.get("STATE")) in ("bound",):
         style.append("#red")
@@ -608,13 +613,13 @@ def make_connection(hostname, proc, args, conn):
     local_port = conn.get("LOCAL_PORT")
 
     connections.append((f"cd_{puml_name_safe(hostname)}_{puml_name_safe(proc)}_{puml_name_safe(hash(args))}"
-                       f"{connection_type(conn)}"
+                       f"{connection_type(conn, priority=3)}"
                        f"p_{puml_name_safe(hostname)}_{puml_name_safe(local_port)}_{puml_name_safe(conn.get("PROTO"))}"))
 
     for remote_host in conn.get("REMOTE_HOST"):
         if (remote_port := conn.get("REMOTE_PORT")) not in ('*', '0'):
             connections.append((f"p_{puml_name_safe(hostname)}_{puml_name_safe(local_port)}_{puml_name_safe(conn.get("PROTO"))}"
-                                f"{connection_type(conn)}"
+                                f"{connection_type(conn, priority=-1)}"
                                 f"p_{puml_name_safe(remote_host)}_{puml_name_safe(remote_port)}_{puml_name_safe(conn.get("PROTO"))}"))
 
     return "\n".join(connections)
@@ -631,8 +636,9 @@ def get_puml_prefix():
 
     ret = ("@startuml\n"
     "!theme sunlust\n"
-    "skinparam linetype polyline\n"
+    "skinparam linetype ortho\n"
     "skinparam roundCorner 7\n"
+    "!pragma layout visjs\n"
     "<style>\n"
     "    process {\n"
     "        LineColor \"#FFF\"\n"
