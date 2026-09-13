@@ -12,26 +12,29 @@
 #   ps -ef > %COMPUTERNAME%_ps.txt
 
 
-import io, os, re, json
+import io, os, re, json, argparse
 
 
 
+UNSPECIFIED = object()
 IN_DIR = "./input"
 MATCHER = {}
 SERVER = {}
 SERVER_MAP = {}
 
 
-def main():
+def main(args):
     ''' Set up and run the thing '''
-    setup()
+    setup(args)
     read_files()
     #print(json.dumps(SERVER, indent=2))
     # map_servers()
 
 
-def setup():
+def setup(args):
     ''' Set globals '''
+
+    IN_DIR = args.i
 
     MATCHER.update({
         "HOST" : re.compile(r"([a-z0-9\-]+)", re.IGNORECASE),
@@ -223,4 +226,8 @@ def parse_windows_netstat(host, line):
 
 if __name__ == "__main__":
     # Run it
-    main()
+    parser = argparse.ArgumentParser("port_mapper.py")
+    parser.add_argument("-i", help=f"Input directory. Default is '{IN_DIR}'", default=IN_DIR)
+    pargs = parser.parse_args()
+
+    main(pargs)

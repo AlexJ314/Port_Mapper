@@ -11,7 +11,7 @@ so filenames of ports and processes from the same server should have the same pr
 It doesn't matter what the rest of the filename is, so long as there's an illegal character
 after the hostname (assuming you don't want the entire filename as the entire hostname).
 
-Run `port_mapper.py -i <input_dir>` or `port_mapper.py -i` to choose the input directory
+Run `port_mapper.py -i <input_dir>` to choose the input directory
 
 ## Linux:
  - `sudo netstat -pan > ${HOSTNAME}_netstat.txt`
