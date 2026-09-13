@@ -19,8 +19,8 @@ Run `port_mapper.py -i <input_dir>` to choose the input directory
 
 ## Windows (powershell, preferred):
  - `netstat -anoq > ${Env:COMPUTERNAME}_netstat.txt`
- - `Get-WmiObject Win32_Process > ${Env:COMPUTERNAME}_ps.txt`
- - **OR**
+ - `Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
+   - **OR**
  - `Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
 
 ## Windows (cmd):

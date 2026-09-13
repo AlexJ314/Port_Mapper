@@ -5,7 +5,7 @@
 #
 # Windows (powershell):
 #   netstat -anoq > ${Env:COMPUTERNAME}_netstat.txt
-#   Get-WmiObject Win32_Process > ${Env:COMPUTERNAME}_ps.txt
+#   Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt
 #     OR
 #   Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt
 #
@@ -58,13 +58,9 @@ def setup(args):
                                            r"(.*)"                                  # Timer
                                           , re.IGNORECASE)
             },
-            "WINDOWS_GW" : {
-                "HEADER" : re.compile(r"__GENUS\s+\:.*", re.IGNORECASE),
-                "PARSER" : parse_windows_gw,
-            },
-            "WINDOWS_GC" : {
+            "WINDOWS_GP" : {
                 "HEADER" : re.compile(r"ProcessId\s+Name\s+CommandLine", re.IGNORECASE),
-                "PARSER" : parse_windows_gc,
+                "PARSER" : parse_windows_gp,
                 "FULL_MATCH" : re.compile(r"([\-\d]+)\s+"      # PID
                                            r"([^\s{2,}]*)\s*"   # Process
                                            r"(.*)"              # CMD
@@ -186,17 +182,10 @@ def parse_linux_netstat(host, line):
     return matched
 
 
-def parse_windows_gw(host, line):
-    ''' Match a Windows Get-WmiObject output '''
+def parse_windows_gp(host, line):
+    ''' Match a Windows Get-CimInstance OR Get-WmiObject output '''
 
-    print("TODO Windows gw")
-    return None
-
-
-def parse_windows_gc(host, line):
-    ''' Match a Windows Get-CimInstance output '''
-
-    matched = MATCHER.get("TYPE").get("WINDOWS_GC").get("FULL_MATCH").match(line)
+    matched = MATCHER.get("TYPE").get("WINDOWS_GP").get("FULL_MATCH").match(line)
     if matched is None:
         return None
 
