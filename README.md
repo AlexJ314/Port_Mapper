@@ -4,7 +4,7 @@ Map the ports and processes between servers
 ## How To:
 On each server you're interested in, get the current lists of ports and processes as an admin user.
 Save these outputs to `./input` and run `port_mapper.py`.
-It will automatically generate a PlantUML Deployment diagram.
+It will automatically generate the syntax for a PlantUML Deployment diagram, which can be converted to a diagram with PlantUML.
 
 Hostnames are determined by the first valid set of characters in each filename,
 so filenames of ports and processes from the same server should have the same prefix.
@@ -12,6 +12,12 @@ It doesn't matter what the rest of the filename is, so long as there's an illega
 after the hostname (assuming you don't want the entire filename as the entire hostname).
 
 Run `port_mapper.py -i <input_dir>` to choose the input directory
+
+Run `port_mapper.py -o <output_file>` to choose the output file
+
+Run `port_mapper.py -x <exlude_file>` to choose the exclude file, that is, which processes are ignored
+
+Run `port_mapper.py -c` to include closed connections
 
 ## Linux:
  - `sudo netstat -pan > ${HOSTNAME}_netstat.txt`

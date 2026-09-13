@@ -21,28 +21,34 @@ import io, os, re, json, argparse, shlex
 UNSPECIFIED = object()
 IN_DIR = "./input"
 OUT_FILE = "./output.puml"
+EXCLUDE_FILE = "./exclude.cfg"
 MATCHER = {}
 DNS = {}
 SERVER = {}
 SERVER_MAP = {}
 EPHEMERAL = 32768
 CLOSED = False
+EXCLUDED = []
 
 
 def main(args):
     ''' Set up and run the thing '''
     setup(args)
+    read_exclude()
     read_files()
     map_servers()
-    #print(json.dumps(SERVER_MAP, indent=2))
     write_puml()
 
 
 def setup(args):
     ''' Set globals '''
 
+    global IN_DIR
     IN_DIR = args.i
+    global OUT_FILE
     OUT_FILE = args.o
+    global EXCLUDE_FILE
+    EXCLUDE_FILE = args.x
     global CLOSED
     CLOSED = args.c
 
@@ -208,6 +214,9 @@ def parse_linux_ps(host, line):
         # Skip; it's part of the header
         return matched
 
+    if args[0] in EXCLUDED:
+        return matched
+
     SERVER.get(host).get("PS").update({
         f"{pid}" : {
             "UID" : uid,
@@ -258,6 +267,9 @@ def parse_linux_netstat(host, line):
     if not CLOSED and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing",):
         return matched
 
+    if process in EXCLUDED:
+        return matched
+
     new_val = {
         "PROTO" : proto,
         "RECV_Q" : recv_q,
@@ -292,6 +304,9 @@ def parse_windows_gp(host, line):
 
     if "-" in pid:
         # Skip; it's part of the header
+        return matched
+
+    if process in EXCLUDED:
         return matched
 
     SERVER.get(host).get("PS").update({
@@ -356,6 +371,24 @@ def parse_windows_netstat(host, line):
     pp.append(new_val)
 
     return matched
+
+
+def read_exclude():
+    ''' Reads excluded processes '''
+
+    try:
+        with open(EXCLUDE_FILE, "r", encoding="utf-8") as fin:
+            parse_exclude_file(fin)
+    except UnicodeError:
+        with open(EXCLUDE_FILE, "r", encoding="utf-16") as fin:
+            parse_exclude_file(fin)
+
+
+def parse_exclude_file(fin):
+    ''' Parses the given exclude file '''
+
+    for line in fin:
+        EXCLUDED.append(line.strip())
 
 
 def map_servers():
@@ -623,6 +656,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", help=f"Input directory. Default is '{IN_DIR}'", default=IN_DIR)
     parser.add_argument("-o", help=f"Output file. Default is '{OUT_FILE}'", default=OUT_FILE)
     parser.add_argument("-c", help=f"Include closed connections. Default is False", action="store_true", default=False)
+    parser.add_argument("-x", help=f"Processes to exclude. Default is '{EXCLUDE_FILE}'", default=EXCLUDE_FILE)
     pargs = parser.parse_args()
 
     main(pargs)
