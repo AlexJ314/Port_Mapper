@@ -24,6 +24,7 @@ MATCHER = {}
 DNS = {}
 SERVER = {}
 SERVER_MAP = {}
+EPHEMERAL = 32768
 
 
 def main(args):
@@ -113,15 +114,14 @@ def read_files():
             continue
 
         host = host.group(1)
-        if SERVER.get(host) is None:
-            SERVER.update({host : {"PS" : {}, "NETSTAT" : {}}})
+        SERVER.setdefault(host, {"PS" : {}, "NETSTAT" : {}})
 
         print(f"\nReading {fname}")
         try:
-            with open(os.path.join(IN_DIR, fname), "r", encoding="utf-16") as fin:
+            with open(os.path.join(IN_DIR, fname), "r", encoding="utf-8") as fin:
                 parse_file(fin, host)
         except UnicodeError:
-            with open(os.path.join(IN_DIR, fname), "r", encoding="utf-8") as fin:
+            with open(os.path.join(IN_DIR, fname), "r", encoding="utf-16") as fin:
                 parse_file(fin, host)
 
 
@@ -155,10 +155,7 @@ def add_dns(hostname, ip):
     if MATCHER.get("BAD_IP").fullmatch(ip):
         return
 
-    if (record := DNS.get(ip)) is None:
-        DNS.update({ip : [hostname] })
-        return
-
+    record = DNS.setdefault(ip, [])
     if hostname not in record:
         record.append(hostname)
 
@@ -251,10 +248,8 @@ def parse_linux_netstat(host, line):
         "TIMER" : timer,
     }
 
-    if SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}") is None:
-        SERVER.get(host).get("NETSTAT").update({f"{local_port}_{proto}" : []})
-
-    SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}").append(new_val)
+    pp = SERVER.get(host).get("NETSTAT").setdefault(f"{local_port}_{proto}", [])
+    pp.append(new_val)
 
     return matched
 
@@ -323,10 +318,8 @@ def parse_windows_netstat(host, line):
         "PID" : pid,
     }
 
-    if SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}") is None:
-        SERVER.get(host).get("NETSTAT").update({f"{local_port}_{proto}" : []})
-
-    SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}").append(new_val)
+    pp = SERVER.get(host).get("NETSTAT").setdefault(f"{local_port}_{proto}", [])
+    pp.append(new_val)
 
     return matched
 
@@ -334,6 +327,7 @@ def parse_windows_netstat(host, line):
 def map_servers():
     ''' Map how servers communicate '''
 
+    # All netstat entries update their processes with connection info
     for (hostname, server) in SERVER.items():
         for (pp, details) in server.get("NETSTAT").items():
             for detail in details:
@@ -343,15 +337,13 @@ def map_servers():
                 proc = server.get("PS").get(pid)
                 if proc is None:
                     continue
-                if proc.get("CONNECTIONS") is None:
-                    proc.update({"CONNECTIONS" : []})
-                conn = proc.get("CONNECTIONS")
+                conn = proc.setdefault("CONNECTIONS", [])
                 port = None
                 portin = None
                 portout = None
-                if detail.get("STATE") in ("listening", "listen", "syn_received", "syn_recv") or detail.get("REMOTE_PORT") in ("*", "0"):
+                if (state := detail.get("STATE")) in ("listening", "listen", "syn_received", "syn_recv") or detail.get("REMOTE_PORT") in ("*", "0"):
                     portin = detail.get("LOCAL_PORT")
-                elif detail.get("STATE") in ("syn_send", "syn_sent"):
+                elif state in ("syn_send", "syn_sent"):
                     portout = detail.get("LOCAL_PORT")
                 else:
                     port = detail.get("LOCAL_PORT")
@@ -362,24 +354,19 @@ def map_servers():
                     "PROTO" : detail.get("PROTO"),
                     "REMOTE_HOST" : get_dns(hostname, detail.get("REMOTE_HOST")),
                     "REMOTE_PORT" : detail.get("REMOTE_PORT"),
-                    "STATE" : detail.get("STATE"),
+                    "STATE" : state,
                 })
 
+    # Map by server > process > args > connections
+    #   Instead of server > pid > connections
     for (hostname, server) in SERVER.items():
-        if SERVER_MAP.get(hostname) is None:
-            SERVER_MAP.update({hostname : {}})
-        s_host = SERVER_MAP.get(hostname)
+        s_host = SERVER_MAP.setdefault(hostname, {})
         for (pid, detail) in server.get("PS").items():
             proc = detail.get("PROCESS")
             args = detail.get("ARGS")
-            if s_host.get(proc) is None:
-                s_host.update({proc : {}})
-            s_proc = s_host.get(proc)
-            if s_proc.get(args) is None:
-                s_proc.update({args : []})
-            s_args = s_proc.get(args)
-            for c in detail.get("CONNECTIONS", []):
-                s_args.append(c)
+            s_proc = s_host.setdefault(proc, {})
+            s_args = s_proc.setdefault(args, [])
+            s_args += detail.get("CONNECTIONS", [])
 
 
 if __name__ == "__main__":
