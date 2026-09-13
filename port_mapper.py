@@ -6,6 +6,8 @@
 # Windows (powershell):
 #   netstat -anoq > ${Env:COMPUTERNAME}_netstat.txt
 #   Get-WmiObject Win32_Process > ${Env:COMPUTERNAME}_ps.txt
+#     OR
+#   Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt
 #
 # Windows (cmd):
 #   netstat -anoq > %COMPUTERNAME%_netstat.txt
@@ -52,13 +54,21 @@ def setup(args):
                                            r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"  # Local host:Port
                                            r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"  # Remote host:Port
                                            r"([a-z\d_]*)\s+"                        # State
-                                           r"([\d]*)\/?-?([^\s{2,}]*)\s+"           # PID/Process
+                                           r"([\d]*)\/?-?([^\s{2,}]*)\s*"           # PID/Process
                                            r"(.*)"                                  # Timer
                                           , re.IGNORECASE)
             },
             "WINDOWS_GW" : {
                 "HEADER" : re.compile(r"__GENUS\s+\:.*", re.IGNORECASE),
                 "PARSER" : parse_windows_gw,
+            },
+            "WINDOWS_GC" : {
+                "HEADER" : re.compile(r"ProcessId\s+Name\s+CommandLine", re.IGNORECASE),
+                "PARSER" : parse_windows_gc,
+                "FULL_MATCH" : re.compile(r"([\-\d]+)\s+"      # PID
+                                           r"([^\s{2,}]*)\s*"   # Process
+                                           r"(.*)"              # CMD
+                                          )
             },
             "WINDOWS_PS" : {
                 "HEADER" : re.compile(r"TODO"),
@@ -181,6 +191,31 @@ def parse_windows_gw(host, line):
 
     print("TODO Windows gw")
     return None
+
+
+def parse_windows_gc(host, line):
+    ''' Match a Windows Get-CimInstance output '''
+
+    matched = MATCHER.get("TYPE").get("WINDOWS_GC").get("FULL_MATCH").match(line)
+    if matched is None:
+        return None
+
+    pid = matched.group(1).lower()
+    process = matched.group(2).lower()
+    args = matched.group(3).lower()
+
+    if "-" in pid:
+        # Skip; it's part of the header
+        return matched
+
+    SERVER.get(host).get("PS").update({
+        f"{pid}" : {
+            "PID" : pid,
+            "PROCESS" : process,
+            "ARGS" : args,
+        }
+    })
+    return matched
 
 
 def parse_windows_ps(host, line):
