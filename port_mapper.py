@@ -21,6 +21,7 @@ import io, os, re, json, argparse, shlex
 UNSPECIFIED = object()
 IN_DIR = "./input"
 MATCHER = {}
+DNS = {}
 SERVER = {}
 SERVER_MAP = {}
 
@@ -29,8 +30,7 @@ def main(args):
     ''' Set up and run the thing '''
     setup(args)
     read_files()
-    #print(json.dumps(SERVER, indent=2))
-    # map_servers()
+    map_servers()
 
 
 def setup(args):
@@ -40,6 +40,12 @@ def setup(args):
 
     MATCHER.update({
         "HOST" : re.compile(r"([a-z0-9\-]+)", re.IGNORECASE),
+        "BAD_IP" : re.compile(r"(\[*(?:(?:0+\.*\:*)+|"
+                               r"(?:f+\.*\:*)+|"
+                               r"(?:\:+0?1?)+|"
+                               r"(?:\.+0?1?)+|"
+                               r"(?:127\.0\.0\.1)"
+                               r")\]*)", re.IGNORECASE),
         "TYPE" : {
             "LINUX_PS" : {
                 "HEADER" : re.compile(r"UID\s+PID\s+PPID\s+C\s+STIME\s+TTY\s+TIME\s+CMD", re.IGNORECASE),
@@ -142,6 +148,32 @@ def guess_type(line):
     return None
 
 
+def add_dns(hostname, ip):
+    ''' Adds a record to the DNS '''
+
+    if MATCHER.get("BAD_IP").fullmatch(ip):
+        return
+
+    if (record := DNS.get(ip)) is None:
+        DNS.update({ip : [hostname] })
+        return
+
+    if hostname not in record:
+        record.append(hostname)
+
+
+def get_dns(hostname, ip):
+    ''' Gets DNS record '''
+
+    if ip is None:
+        return [None]
+
+    if MATCHER.get("BAD_IP").fullmatch(ip):
+        return [hostname]
+
+    return DNS.get(ip, [ip])
+
+
 def parse_linux_ps(host, line):
     ''' Match a Linux ps output '''
 
@@ -197,25 +229,33 @@ def parse_linux_netstat(host, line):
     process = matched.group(10).lower()
     timer = matched.group(11).lower()
 
+    add_dns(host, local_host)
+
     if "*" in local_port:
         # Don't bother if the port isn't set up
         print(f"WARNING: Local port isn't set up: `{line}`")
         return matched
 
+    new_val = {
+        "PROTO" : proto,
+        "RECV_Q" : recv_q,
+        "SEND_Q" : send_q,
+        "LOCAL_HOST" : local_host,
+        "LOCAL_PORT" : local_port,
+        "REMOTE_HOST" : remote_host,
+        "REMOTE_PORT" : remote_port,
+        "STATE" : state,
+        "PID" : pid,
+        "PROCESS" : process,
+        "TIMER" : timer,
+    }
+
+    if SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}") is not None and MATCHER.get("BAD_IP").fullmatch(remote_host):
+        # print(f"Not overwriting `{SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}")}` with `{new_val}`")
+        return matched
+
     SERVER.get(host).get("NETSTAT").update({
-        f"{local_port}_{proto}" : {
-            "PROTO" : proto,
-            "RECV_Q" : recv_q,
-            "SEND_Q" : send_q,
-            "LOCAL_HOST" : local_host,
-            "LOCAL_PORT" : local_port,
-            "REMOTE_HOST" : remote_host,
-            "REMOTE_PORT" : remote_port,
-            "STATE" : state,
-            "PID" : pid,
-            "PROCESS" : process,
-            "TIMER" : timer,
-        }
+        f"{local_port}_{proto}" : new_val,
     })
     return matched
 
@@ -267,23 +307,76 @@ def parse_windows_netstat(host, line):
     state = matched.group(6).lower()
     pid = matched.group(7).lower()
 
+    add_dns(host, local_host)
+
     if "*" in local_port:
         # Don't bother if the port isn't set up
         print(f"WARNING: Local port isn't set up: `{line}`")
         return matched
 
+    new_val = {
+        "PROTO" : proto,
+        "LOCAL_HOST" : local_host,
+        "LOCAL_PORT" : local_port,
+        "REMOTE_HOST" : remote_host,
+        "REMOTE_PORT" : remote_port,
+        "STATE" : state,
+        "PID" : pid,
+    }
+
+    if SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}") is not None and MATCHER.get("BAD_IP").fullmatch(remote_host):
+        # print(f"Not overwriting `{SERVER.get(host).get("NETSTAT").get(f"{local_port}_{proto}")}` with `{new_val}`")
+        return matched
+
     SERVER.get(host).get("NETSTAT").update({
-        f"{local_port}_{proto}" : {
-            "PROTO" : proto,
-            "LOCAL_HOST" : local_host,
-            "LOCAL_PORT" : local_port,
-            "REMOTE_HOST" : remote_host,
-            "REMOTE_PORT" : remote_port,
-            "STATE" : state,
-            "PID" : pid,
-        }
+        f"{local_port}_{proto}" : new_val,
     })
     return matched
+
+
+def map_servers():
+    ''' Map how servers communicate '''
+
+    for (hostname, server) in SERVER.items():
+        for (pp, detail) in server.get("NETSTAT").items():
+            pid = detail.get("PID")
+            if pid is None:
+                continue
+            proc = server.get("PS").get(pid)
+            if proc is None:
+                continue
+            if proc.get("CONNECTIONS") is None:
+                proc.update({"CONNECTIONS" : []})
+            conn = proc.get("CONNECTIONS")
+            portout = None
+            portin = None
+            if detail.get("STATE") in ("listening", "listen") or detail.get("REMOTE_PORT") in ("*", "0"):
+                portin = detail.get("LOCAL_PORT")
+            else:
+                portout = detail.get("LOCAL_PORT")
+            conn.append({
+                "PORTOUT" : portout,
+                "PORTIN" : portin,
+                "PROTO" : detail.get("PROTO"),
+                "REMOTE_HOST" : get_dns(hostname, detail.get("REMOTE_HOST")),
+                "REMOTE_PORT" : detail.get("REMOTE_PORT"),
+            })
+
+    for (hostname, server) in SERVER.items():
+        if SERVER_MAP.get(hostname) is None:
+            SERVER_MAP.update({hostname : {}})
+        s_host = SERVER_MAP.get(hostname)
+        for (pid, detail) in server.get("PS").items():
+            proc = detail.get("PROCESS")
+            args = detail.get("ARGS")
+            if s_host.get(proc) is None:
+                s_host.update({proc : {}})
+            s_proc = s_host.get(proc)
+            if s_proc.get(args) is None:
+                s_proc.update({args : []})
+            s_args = s_proc.get(args)
+            for c in detail.get("CONNECTIONS", []):
+                s_args.append(c)
 
 
 if __name__ == "__main__":
