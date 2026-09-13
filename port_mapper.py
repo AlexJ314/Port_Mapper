@@ -14,7 +14,7 @@
 #   ps -ef > %COMPUTERNAME%_ps.txt
 
 
-import io, os, re, json, argparse
+import io, os, re, json, argparse, shlex
 
 
 
@@ -44,27 +44,36 @@ def setup(args):
             "LINUX_PS" : {
                 "HEADER" : re.compile(r"UID\s+PID\s+PPID\s+C\s+STIME\s+TTY\s+TIME\s+CMD", re.IGNORECASE),
                 "PARSER" : parse_linux_ps,
+                "FULL_MATCH" : re.compile(r"((?:.(?!\s{2,}))*[^\s])\s+"         # UID
+                                           r"([\d]+)\s+"                        # PID
+                                           r"([\d]+)\s+"                        # PPID
+                                           r"([\d]+)\s+"                        # C
+                                           r"([\d\:]+)\s+"                      # STIME
+                                           r"([^\s]+)\s+"                       # TTY
+                                           r"([^\s]+)\s+"                       # TIME
+                                           r"[\-\/]*((?:.(?!\s{2,}))*[^\s])\s*" # CMD
+                                          , re.IGNORECASE),
             },
             "LINUX_NETSTAT" : {
                 "HEADER" : re.compile(r"Proto\s+Recv-Q\s+Send-Q\s+Local Address\s+Foreign Address\s+State\s+PID/Program name\s+Timer", re.IGNORECASE),
                 "PARSER" : parse_linux_netstat,
-                "FULL_MATCH" : re.compile(r"([a-z\d]+)\s+"                         # Proto
-                                           r"([\d]+)\s+"                            # Recv-Q
-                                           r"([\d]+)\s+"                            # Send-Q
-                                           r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"  # Local host:Port
-                                           r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"  # Remote host:Port
-                                           r"([a-z\d_]*)\s+"                        # State
-                                           r"([\d]*)\/?-?([^\s{2,}]*)\s*"           # PID/Process
-                                           r"(.*)"                                  # Timer
-                                          , re.IGNORECASE)
+                "FULL_MATCH" : re.compile(r"([a-z\d]+)\s+"                              # Proto
+                                           r"([\d]+)\s+"                                # Recv-Q
+                                           r"([\d]+)\s+"                                # Send-Q
+                                           r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"      # Local host:Port
+                                           r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"      # Remote host:Port
+                                           r"([a-z\d_]*)\s+"                            # State
+                                           r"([\d]*)\/?-?((?:.(?!\s{2,}))*[^\s])\s*"    # PID/Process
+                                           r"(.*)"                                      # Timer
+                                          , re.IGNORECASE),
             },
             "WINDOWS_GP" : {
                 "HEADER" : re.compile(r"ProcessId\s+Name\s+CommandLine", re.IGNORECASE),
                 "PARSER" : parse_windows_gp,
-                "FULL_MATCH" : re.compile(r"([\-\d]+)\s+"      # PID
-                                           r"([^\s{2,}]*)\s*"   # Process
-                                           r"(.*)"              # CMD
-                                          )
+                "FULL_MATCH" : re.compile(r"([\-\d]+)\s+"                   # PID
+                                           r"((?:.(?!\s{2,}))*[^\s])\s*"    # Process
+                                           r"(.*)"                          # CMD
+                                          , re.IGNORECASE),
             },
             "WINDOWS_PS" : {
                 "HEADER" : re.compile(r"TODO"),
@@ -73,12 +82,12 @@ def setup(args):
             "WINDOWS_NETSTAT" : {
                 "HEADER" : re.compile(r"Proto\s+Local\s+Address\s+Foreign\s+Address\s+State\s+PID", re.IGNORECASE),
                 "PARSER" : parse_windows_netstat,
-                "FULL_MATCH" : re.compile(r"([a-z\d]+)\s+"                         # Proto
+                "FULL_MATCH" : re.compile(r"([a-z\d]+)\s+"                          # Proto
                                            r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"  # Local host:Port
                                            r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"  # Remote host:Port
                                            r"([a-z\d_]*)\s+"                        # State
                                            r"([\d]+)"                               # PID
-                                          , re.IGNORECASE)
+                                          , re.IGNORECASE),
             },
         },
     })
@@ -136,8 +145,37 @@ def guess_type(line):
 def parse_linux_ps(host, line):
     ''' Match a Linux ps output '''
 
-    print("TODO Linux ps")
-    return None
+    matched = MATCHER.get("TYPE").get("LINUX_PS").get("FULL_MATCH").match(line)
+    if matched is None:
+        return None
+
+    uid = matched.group(1).lower()
+    pid = matched.group(2).lower()
+    ppid = matched.group(3).lower()
+    c = matched.group(4).lower()
+    stime = matched.group(5).lower()
+    tty = matched.group(6).lower()
+    time = matched.group(7).lower()
+    args = shlex.split(matched.group(8).lower(), posix=False)
+
+    if "-" in pid:
+        # Skip; it's part of the header
+        return matched
+
+    SERVER.get(host).get("PS").update({
+        f"{pid}" : {
+            "UID" : uid,
+            "PID" : pid,
+            "PPID" : ppid,
+            "C" : c,
+            "STIME" : stime,
+            "TTY" : tty,
+            "TIME" : time,
+            "PROCESS" : args[0],
+            "ARGS" : shlex.join(args[1:])
+        }
+    })
+    return matched
 
 
 def parse_linux_netstat(host, line):
@@ -176,7 +214,7 @@ def parse_linux_netstat(host, line):
             "STATE" : state,
             "PID" : pid,
             "PROCESS" : process,
-            "timer" : timer,
+            "TIMER" : timer,
         }
     })
     return matched
