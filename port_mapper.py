@@ -264,7 +264,7 @@ def parse_linux_netstat(host, line):
         port_type = "portin"
     elif state in ("syn_send", "syn_sent"):
         port_type = "portout"
-    if not CLOSED and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing",):
+    if not CLOSED and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","bound"):
         return matched
 
     if process in EXCLUDED:
@@ -353,7 +353,7 @@ def parse_windows_netstat(host, line):
         port_type = "portin"
     elif state in ("syn_send", "syn_sent"):
         port_type = "portout"
-    if not CLOSED and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing",):
+    if not CLOSED and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","bound"):
         return matched
 
     new_val = {
@@ -662,7 +662,7 @@ def get_puml_prefix():
     "!theme sunlust\n"
     "skinparam linetype ortho\n"
     "skinparam roundCorner 7\n"
-    "!pragma layout visjs\n"
+    "!pragma layout elk\n"
     "<style>\n"
     "    process {\n"
     "        LineColor \"#FFF\"\n"
