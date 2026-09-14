@@ -447,7 +447,7 @@ def convert_to_puml():
     define_content = []
     connect_content = []
     for (hostname, server) in SERVER_MAP.items():
-        define_content.append(make_node(hostname, server))
+        define_content.append(make_node(hostname, server, connect_content))
         for (proc, args) in server.items():
             define_content.append(make_process(hostname, proc, args))
             for (arg, connections) in args.items():
@@ -460,7 +460,7 @@ def convert_to_puml():
         define_content.append(end_node(hostname, server))
 
     for (hostname, server) in DNS.get("UNKNOWN").items():
-        define_content.append(make_unknown_node(hostname, server))
+        define_content.append(make_unknown_node(hostname, server, connect_content))
         define_content.append(end_unknown_node(hostname, server))
 
     return define_content + connect_content
@@ -526,7 +526,7 @@ def label_name(hostname, port, proto):
     return f"l_{puml_name_safe(hostname)}_{puml_name_safe(port)}_{puml_name_safe(proto)}"
 
 
-def make_node(hostname, server):
+def make_node(hostname, server, _conns):
     ''' How to start a node '''
 
     ret = f"node \"{puml_safe(hostname)}\" as {node_name(hostname)} {{\n"
@@ -540,6 +540,9 @@ def make_node(hostname, server):
                 name = f"<b>{name}</b>"
             ret += f"  label \"{name}\" as {label_name(hostname, port, connection.get("PROTO"))}\n"
             ret += f"  {connection.get("PORT_TYPE")} \" \" as {port_name(hostname, port, connection.get("PROTO"))}\n"
+            _conns.append((f"{label_name(hostname, port, connection.get("PROTO"))}"
+                           f"{connection_type(connection, priority=2)}"
+                           f"{port_name(hostname, port, connection.get("PROTO"))}"))
 
     return ret
 
@@ -550,7 +553,7 @@ def end_node(hostname, server):
     return "}"
 
 
-def make_unknown_node(hostname, server):
+def make_unknown_node(hostname, server, _conns):
     ''' How to start an unknown node '''
 
     ret = f"node \"{puml_safe(hostname)}\" as {node_name(hostname)} {{\n"
@@ -563,6 +566,9 @@ def make_unknown_node(hostname, server):
             name = f"<b>{name}</b>"
         ret += f"  label \"{name}\" as {label_name(hostname, port, connections.get("PROTO"))}\n"
         ret += f"  {connections.get("PORT_TYPE")} \" \" as {port_name(hostname, port, connections.get("PROTO"))}\n"
+        _conns.append((f"{label_name(hostname, port, connections.get("PROTO"))}"
+                           f"{connection_type(connections, priority=2)}"
+                           f"{port_name(hostname, port, connections.get("PROTO"))}"))
 
     return ret
 
@@ -632,7 +638,7 @@ def connection_type(conn, priority=2, hidden=False):
     if conn.get("PROTO") not in ("tcp","tcp6",):
         style.append("dashed")
 
-    for c in conn.get("REMOTE_HOST"):
+    for c in conn.get("REMOTE_HOST", []):
         if c not in conn.get("LOCAL_HOST") and "#blue" not in style:
             style.append("#blue")
 
@@ -659,10 +665,6 @@ def make_connection(hostname, proc, args, conn):
     connections.append((f"{arg_name(hostname, proc, args)}"
                         f"{connection_type(conn, priority=2)}"
                         f"{label_name(hostname, local_port, conn.get("PROTO"))}"))
-
-    connections.append((f"{label_name(hostname, local_port, conn.get("PROTO"))}"
-                        f"{connection_type(conn, priority=2)}"
-                        f"{port_name(hostname, local_port, conn.get("PROTO"))}"))
 
     for remote_host in conn.get("REMOTE_HOST"):
         if (remote_port := conn.get("REMOTE_PORT")) not in ('*', '0'):
