@@ -337,8 +337,8 @@ def parse_windows_ps(host, line):
     uid = matched.group(1).lower()
     pid = matched.group(2).lower()
     ppid = matched.group(3).lower()
-    stime = matched.group(5).lower()
-    args = shlex.split(matched.group(8).lower(), posix=False)
+    stime = matched.group(4).lower()
+    args = shlex.split(matched.group(5).lower(), posix=False)
 
     if args[0] in EXCLUDED:
         return matched
