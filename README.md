@@ -37,5 +37,4 @@ Run `port_mapper.py -c` to include closed connections
 
 ## ToDo:
  - Parse Windows ps outputs
- - Dump to .csv
  - Make the svg interactive such that clicking nodes and connections highlights the connections

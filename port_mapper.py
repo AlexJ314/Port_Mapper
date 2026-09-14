@@ -14,7 +14,7 @@
 #   ps -ef > %COMPUTERNAME%_ps.txt
 
 
-import io, os, re, argparse, shlex, subprocess
+import io, os, re, argparse, shlex, subprocess, csv
 
 
 
@@ -38,6 +38,7 @@ def main(args):
     read_files()
     map_servers()
     write_puml()
+    dump_csv()
     build_puml()
 
 
@@ -719,6 +720,43 @@ def get_puml_suffix():
     ret = ("\n@enduml\n")
 
     return ret
+
+
+def dump_csv():
+    ''' Dump connections to csv '''
+
+    csv_dump = []
+
+    header = ["Protocol", "State", "Source Host", "Source Port", "Source Process", "Source Args",
+        "Destination Host", "Destination Port", "Destination Process", "Destination Args"]
+    csv_dump.append(header)
+
+    for (hostname, server) in SERVER_MAP.items():
+        for (proc, args) in server.items():
+            for (arg, connections) in args.items():
+                for conn in connections:
+                    for remote_host in conn.get("REMOTE_HOST", []):
+                        remote_process = []
+                        remote_args = []
+                        for c in SERVER.get(remote_host, {}).get("NETSTAT", {}).get(f"{conn.get("REMOTE_PORT")}_{conn.get("PROTO")}", []):
+                            if not hostname in get_dns(hostname, c.get("REMOTE_HOST"), c.get("REMOTE_PORT"), c.get("PROTO")):
+                                continue
+                            remote_pid = c.get("PID", "")
+                            remote_process.append(SERVER.get(remote_host, {}).get("PS", {}).get(remote_pid, {}).get("PROCESS"))
+                            remote_args.append(SERVER.get(remote_host, {}).get("PS", {}).get(remote_pid, {}).get("ARGS"))
+                        if len(remote_process) == 0:
+                            row = [conn.get("PROTO"), conn.get("STATE"), hostname, conn.get("LOCAL_PORT"), proc, arg,
+                                remote_host, conn.get("REMOTE_PORT"), "", ""]
+                            csv_dump.append(row)
+                        for (p, a) in zip(remote_process, remote_args):
+                            row = [conn.get("PROTO"), conn.get("STATE"), hostname, conn.get("LOCAL_PORT"), proc, arg,
+                                remote_host, conn.get("REMOTE_PORT"), p, a]
+                            csv_dump.append(row)
+
+    csv_file = f"{".".join(OUT_FILE.split(".")[:-1])}.csv"
+    with open(csv_file, "w", encoding="utf-8", newline='') as fout:
+        csv_writer = csv.writer(fout, quoting=csv.QUOTE_ALL)
+        csv_writer.writerows(csv_dump)
 
 
 def build_puml():
