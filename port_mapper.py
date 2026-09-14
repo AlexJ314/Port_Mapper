@@ -135,13 +135,18 @@ def read_files():
         host = host.group(1)
         SERVER.setdefault(host, {"PS" : {}, "NETSTAT" : {}})
 
-        print(f"\nReading {fname}")
+        print(f"Reading {fname}")
         try:
             with open(os.path.join(GLOBALS.get("IN_DIR"), fname), "r", encoding="utf-8") as fin:
-                parse_file(fin, host)
+                if parse_file(fin, host) is None:
+                    print(f"Failed to determine type of `{fname}`")
         except UnicodeError:
             with open(os.path.join(GLOBALS.get("IN_DIR"), fname), "r", encoding="utf-16") as fin:
-                parse_file(fin, host)
+                if parse_file(fin, host) is None:
+                    print(f"Failed to determine type of `{fname}`")
+
+        if len(SERVER.get(host).get("PS")) < 1 and len(SERVER.get(host).get("NETSTAT")) < 1:
+            del SERVER[host]
 
 
 def parse_file(fin, host):
@@ -157,6 +162,7 @@ def parse_file(fin, host):
         elif MATCHER.get("TYPE").get(ftype).get("PARSER")(host, line) is None:
             print(f"Stopped reading at `{line}`")
             break
+    return ftype
 
 
 def guess_type(line):
@@ -798,7 +804,10 @@ def dump_csv():
                 row = ["", "", hostname, "", proc, arg, "", "", "", ""]
                 csv_dump.append(row)
 
-    csv_file = f"{".".join(GLOBALS.get("OUT_FILE").split(".")[:-1])}.csv"
+    split_fname = GLOBALS.get("OUT_FILE").split(".")
+    if len(split_fname) > 1:
+        split_fname = split_fname[:-1]
+    csv_file = f"{".".join(split_fname)}.csv"
     with open(csv_file, "w", encoding="utf-8", newline='') as fout:
         csv_writer = csv.writer(fout, quoting=csv.QUOTE_ALL)
         csv_writer.writerows(csv_dump)
