@@ -629,10 +629,7 @@ def connection_type(conn, priority=2, hidden=False):
     elif priority < 1:
         style.append("norank")
 
-    if (state := conn.get("STATE")) in ("bound",):
-        style.append("#red")
-
-    if state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing",):
+    if (state := conn.get("STATE")) in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing",):
         style.append("dotted,norank")
 
     if conn.get("PROTO") not in ("tcp","tcp6",):
@@ -647,6 +644,9 @@ def connection_type(conn, priority=2, hidden=False):
         style.append("#green")
     elif conn.get("PORT_TYPE") == "portout":
         arrow_start = ">"
+
+    if state in ("bound",):
+        style.append("#red")
 
     style = ",".join(style)
     if len(style) > 0:
