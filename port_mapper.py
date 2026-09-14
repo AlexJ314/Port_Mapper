@@ -14,7 +14,7 @@
 #   ps -ef > %COMPUTERNAME%_ps.txt
 
 
-import io, os, re, argparse, shlex
+import io, os, re, argparse, shlex, subprocess
 
 
 
@@ -38,6 +38,7 @@ def main(args):
     read_files()
     map_servers()
     write_puml()
+    build_puml()
 
 
 def setup(args):
@@ -628,11 +629,6 @@ def connection_type(conn, priority=2, hidden=False):
     if state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing",):
         style.append("dotted,norank")
 
-    if conn.get("PORT_TYPE") == "portin":
-        arrow_start = "<"
-    elif conn.get("PORT_TYPE") == "portout":
-        arrow_start = ">"
-
     if conn.get("PROTO") not in ("tcp","tcp6",):
         style.append("dashed")
 
@@ -640,8 +636,11 @@ def connection_type(conn, priority=2, hidden=False):
         if c not in conn.get("LOCAL_HOST") and "#blue" not in style:
             style.append("#blue")
 
-    if (state := conn.get("STATE")) in ("listen","listening",):
+    if conn.get("PORT_TYPE") == "portin":
+        arrow_start = "<"
         style.append("#green")
+    elif conn.get("PORT_TYPE") == "portout":
+        arrow_start = ">"
 
     style = ",".join(style)
     if len(style) > 0:
@@ -688,6 +687,8 @@ def get_puml_prefix():
     "skinparam linetype ortho\n"
     "skinparam roundCorner 7\n"
     "!pragma layout elk\n"
+    "'!pragma svginteractive true\n"
+    "'skinparam pathHoverColor #yellow\n"
     "<style>\n"
     "    process {\n"
     "        LineColor \"#FFF\"\n"
@@ -697,7 +698,16 @@ def get_puml_prefix():
     "        LineColor $colors.green\n"
     "        BackgroundColor $colors.green_bg\n"
     "    }\n"
-    "</style>\n")
+    "</style>\n"
+    "legend top left\n"
+    "   <color:$colors.font>Loopback Port</color>\n"
+    "   <color:#blue>External Port</color>\n"
+    "   <color:#green>Listening Port</color>\n"
+    "   <color:#red>Bound Socket</color>\n"
+    "   Solid:  Open, TCP\n"
+    "   Dashed: OPEN, non-TCP\n"
+    "   Dotted: Closed\n"
+    "end legend\n")
 
     return ret
 
@@ -707,6 +717,12 @@ def get_puml_suffix():
     ret = ("\n@enduml\n")
 
     return ret
+
+
+def build_puml():
+    ''' Runs plantuml.jar '''
+
+    subprocess.run(["java", "-jar", "plantuml.jar", OUT_FILE, "-tsvg"])
 
 
 if __name__ == "__main__":

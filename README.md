@@ -4,7 +4,8 @@ Map the ports and processes between servers
 ## How To:
 On each server you're interested in, get the current lists of ports and processes as an admin user.
 Save these outputs to `./input` and run `port_mapper.py`.
-It will automatically generate the syntax for a PlantUML Deployment diagram, which can be converted to a diagram with PlantUML.
+It will automatically generate the syntax for a PlantUML Deployment diagram.
+If `plantuml.jar` is available in the current directory, an svg diagram will be automatically generated.
 
 Hostnames are determined by the first valid set of characters in each filename,
 so filenames of ports and processes from the same server should have the same prefix.
