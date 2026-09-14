@@ -4,7 +4,7 @@ Map the ports and processes between servers
 ## How To:
 On each server you're interested in, get the current lists of ports and processes as an admin user.
 Save these outputs to `./input` and run `port_mapper.py`.
-It will automatically generate the syntax for a PlantUML Deployment diagram.
+It will automatically generate the syntax for a [PlantUML](https://github.com/plantuml/plantuml) Deployment diagram.
 If `plantuml.jar` is available in the current directory, an svg diagram will be automatically generated.
 
 Hostnames are determined by the first valid set of characters in each filename,
@@ -34,3 +34,8 @@ Run `port_mapper.py -c` to include closed connections
  - `netstat -anoq > %COMPUTERNAME%_netstat.txt`
  - `ps -ef > %COMPUTERNAME%_ps.txt`
    - To be clear, this `ps` is a port of Linux's `ps`, NOT an alias of powershell's `Get-Process`
+
+## ToDo:
+ - Parse Windows ps outputs
+ - Dump to .csv
+ - Make the svg interactive such that clicking nodes and connections highlights the connections
