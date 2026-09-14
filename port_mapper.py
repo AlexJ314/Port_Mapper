@@ -733,8 +733,10 @@ def dump_csv():
 
     for (hostname, server) in SERVER_MAP.items():
         for (proc, args) in server.items():
+            no_connections = True
             for (arg, connections) in args.items():
                 for conn in connections:
+                    no_connections = False
                     for remote_host in conn.get("REMOTE_HOST", []):
                         remote_process = []
                         remote_args = []
@@ -752,6 +754,9 @@ def dump_csv():
                             row = [conn.get("PROTO"), conn.get("STATE"), hostname, conn.get("LOCAL_PORT"), proc, arg,
                                 remote_host, conn.get("REMOTE_PORT"), p, a]
                             csv_dump.append(row)
+            if no_connections:
+                row = ["", "", hostname, "", proc, arg, "", "", "", ""]
+                csv_dump.append(row)
 
     csv_file = f"{".".join(OUT_FILE.split(".")[:-1])}.csv"
     with open(csv_file, "w", encoding="utf-8", newline='') as fout:
