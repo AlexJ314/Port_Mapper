@@ -435,15 +435,34 @@ def map_servers():
                 proc = server.get("PS").get(pid)
                 if proc is None:
                     continue
+                # Figure out the process details on the remote host
+                remote_hosts = get_dns(hostname, detail.get("REMOTE_HOST"), detail.get("REMOTE_PORT"), detail.get("PROTO"))
+                remote_process_many = []
+                remote_args_many = []
+                for remote_host in remote_hosts:
+                    remote_pids = []
+                    for remote_connection in SERVER.get(remote_host, {}).get("NETSTAT", {}).get(f"{detail.get("REMOTE_PORT")}_{detail.get("PROTO")}", []):
+                        remote_pids.append(remote_connection.get("PID"))
+                    remote_process = []
+                    remote_args = []
+                    for remote_pid in remote_pids:
+                        remote_detail = SERVER.get(remote_host, {}).get("PS", {}).get(remote_pid, {})
+                        remote_process.append(remote_detail.get("PROCESS"))
+                        remote_args.append(remote_detail.get("ARGS"))
+                    remote_process_many.append(remote_process)
+                    remote_args_many.append(remote_args)
+                # Add the connection
                 conn = proc.setdefault("CONNECTIONS", [])
                 conn.append({
                     "LOCAL_HOST" : get_dns(hostname, detail.get("LOCAL_HOST"), detail.get("LOCAL_PORT"), detail.get("PROTO")),
                     "LOCAL_PORT" : detail.get("LOCAL_PORT"),
                     "PORT_TYPE" : detail.get("PORT_TYPE"),
                     "PROTO" : detail.get("PROTO"),
-                    "REMOTE_HOST" : get_dns(hostname, detail.get("REMOTE_HOST"), detail.get("REMOTE_PORT"), detail.get("PROTO")),
+                    "REMOTE_HOST" : remote_hosts,
                     "REMOTE_PORT" : detail.get("REMOTE_PORT"),
                     "STATE" : detail.get("STATE"),
+                    "REMOTE_PROCESS" : remote_process_many,
+                    "REMOTE_ARGS" : remote_args_many,
                 })
 
     # Map by server > process > args > connections
@@ -769,21 +788,9 @@ def dump_csv():
             no_connections = True
             for (arg, connections) in args.items():
                 for conn in connections:
-                    no_connections = False
-                    for remote_host in conn.get("REMOTE_HOST", []):
-                        remote_process = []
-                        remote_args = []
-                        for c in SERVER.get(remote_host, {}).get("NETSTAT", {}).get(f"{conn.get("REMOTE_PORT")}_{conn.get("PROTO")}", []):
-                            if not hostname in get_dns(hostname, c.get("REMOTE_HOST"), c.get("REMOTE_PORT"), c.get("PROTO")):
-                                continue
-                            remote_pid = c.get("PID", "")
-                            remote_process.append(SERVER.get(remote_host, {}).get("PS", {}).get(remote_pid, {}).get("PROCESS"))
-                            remote_args.append(SERVER.get(remote_host, {}).get("PS", {}).get(remote_pid, {}).get("ARGS"))
-                        if len(remote_process) == 0:
-                            row = [conn.get("PROTO"), conn.get("STATE"), hostname, conn.get("LOCAL_PORT"), proc, arg,
-                                remote_host, conn.get("REMOTE_PORT"), "", ""]
-                            csv_dump.append(row)
+                    for (remote_host, (remote_process, remote_args)) in zip(conn.get("REMOTE_HOST"), zip(conn.get("REMOTE_PROCESS"), conn.get("REMOTE_ARGS"))):
                         for (p, a) in zip(remote_process, remote_args):
+                            no_connections = False
                             row = [conn.get("PROTO"), conn.get("STATE"), hostname, conn.get("LOCAL_PORT"), proc, arg,
                                 remote_host, conn.get("REMOTE_PORT"), p, a]
                             csv_dump.append(row)
