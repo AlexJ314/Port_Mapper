@@ -18,16 +18,17 @@ import io, os, re, argparse, shlex, subprocess, csv
 
 
 
-UNSPECIFIED = object()
-IN_DIR = "./input"
-OUT_FILE = "./output.puml"
-EXCLUDE_FILE = "./exclude.cfg"
+GLOBALS = {
+    "IN_DIR" : "./input",
+    "OUT_FILE" : "./output.puml",
+    "EXCLUDE_FILE" : "./exclude.cfg",
+    "EPHEMERAL" : 32768,
+    "CLOSED" : False,
+}
 MATCHER = {}
 DNS = {}
 SERVER = {}
 SERVER_MAP = {}
-EPHEMERAL = 32768
-CLOSED = False
 EXCLUDED = []
 
 
@@ -45,14 +46,10 @@ def main(args):
 def setup(args):
     ''' Set globals '''
 
-    global IN_DIR
-    IN_DIR = args.i
-    global OUT_FILE
-    OUT_FILE = args.o
-    global EXCLUDE_FILE
-    EXCLUDE_FILE = args.x
-    global CLOSED
-    CLOSED = args.c
+    GLOBALS.update({"IN_DIR" : args.i})
+    GLOBALS.update({"OUT_FILE" : args.o})
+    GLOBALS.update({"EXCLUDE_FILE" : args.x})
+    GLOBALS.update({"CLOSED" : args.c})
 
     MATCHER.update({
         "HOST" : re.compile(r"([a-z0-9\-]+)", re.IGNORECASE),
@@ -118,8 +115,8 @@ def setup(args):
 def read_files():
     ''' Read the files in the input directory '''
 
-    for fname in os.listdir(IN_DIR):
-        if not os.path.isfile(os.path.join(IN_DIR, fname)):
+    for fname in os.listdir(GLOBALS.get("IN_DIR")):
+        if not os.path.isfile(os.path.join(GLOBALS.get("IN_DIR"), fname)):
             print(f"{fname} is not a file. Skipping")
             continue
 
@@ -132,10 +129,10 @@ def read_files():
 
         print(f"\nReading {fname}")
         try:
-            with open(os.path.join(IN_DIR, fname), "r", encoding="utf-8") as fin:
+            with open(os.path.join(GLOBALS.get("IN_DIR"), fname), "r", encoding="utf-8") as fin:
                 parse_file(fin, host)
         except UnicodeError:
-            with open(os.path.join(IN_DIR, fname), "r", encoding="utf-16") as fin:
+            with open(os.path.join(GLOBALS.get("IN_DIR"), fname), "r", encoding="utf-16") as fin:
                 parse_file(fin, host)
 
 
@@ -266,7 +263,7 @@ def parse_linux_netstat(host, line):
         port_type = "portin"
     elif state in ("syn_send", "syn_sent"):
         port_type = "portout"
-    if not CLOSED and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","bound"):
+    if not GLOBALS.get("CLOSED") and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","bound"):
         return matched
 
     if process in EXCLUDED:
@@ -355,7 +352,7 @@ def parse_windows_netstat(host, line):
         port_type = "portin"
     elif state in ("syn_send", "syn_sent"):
         port_type = "portout"
-    if not CLOSED and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","bound"):
+    if not GLOBALS.get("CLOSED") and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","bound"):
         return matched
 
     new_val = {
@@ -379,10 +376,10 @@ def read_exclude():
     ''' Reads excluded processes '''
 
     try:
-        with open(EXCLUDE_FILE, "r", encoding="utf-8") as fin:
+        with open(GLOBALS.get("EXCLUDE_FILE"), "r", encoding="utf-8") as fin:
             parse_exclude_file(fin)
     except UnicodeError:
-        with open(EXCLUDE_FILE, "r", encoding="utf-16") as fin:
+        with open(GLOBALS.get("EXCLUDE_FILE"), "r", encoding="utf-16") as fin:
             parse_exclude_file(fin)
 
 
@@ -436,7 +433,7 @@ def write_puml():
     prefix = get_puml_prefix()
     suffix = get_puml_suffix()
 
-    with open(OUT_FILE, "w", encoding="utf-8") as fout:
+    with open(GLOBALS.get("OUT_FILE"), "w", encoding="utf-8") as fout:
         fout.write(prefix)
         fout.write("\n".join(content))
         fout.write(suffix)
@@ -535,7 +532,7 @@ def make_node(hostname, server, _conns):
     for (pp, connections) in SERVER.get(hostname).get("NETSTAT").items():
         for connection in connections:
             name = (port := connection.get("LOCAL_PORT"))
-            if int(port) >= EPHEMERAL:
+            if int(port) >= GLOBALS.get("EPHEMERAL"):
                 name = f"<i>{name}</i>"
             else:
                 name = f"<b>{name}</b>"
@@ -561,7 +558,7 @@ def make_unknown_node(hostname, server, _conns):
 
     for (pp, connections) in server.items():
         name = (port := connections.get("LOCAL_PORT"))
-        if int(port) >= EPHEMERAL:
+        if int(port) >= GLOBALS.get("EPHEMERAL"):
             name = f"<i>{name}</i>"
         else:
             name = f"<b>{name}</b>"
@@ -708,7 +705,7 @@ def get_puml_prefix():
     "   <color:#green>Listening Port</color>\n"
     "   <color:#red>Bound Socket</color>\n"
     "   Solid:  Open, TCP\n"
-    "   Dashed: OPEN, non-TCP\n"
+    "   Dashed: Open, non-TCP\n"
     "   Dotted: Closed\n"
     "end legend\n")
 
@@ -758,7 +755,7 @@ def dump_csv():
                 row = ["", "", hostname, "", proc, arg, "", "", "", ""]
                 csv_dump.append(row)
 
-    csv_file = f"{".".join(OUT_FILE.split(".")[:-1])}.csv"
+    csv_file = f"{".".join(GLOBALS.get("OUT_FILE").split(".")[:-1])}.csv"
     with open(csv_file, "w", encoding="utf-8", newline='') as fout:
         csv_writer = csv.writer(fout, quoting=csv.QUOTE_ALL)
         csv_writer.writerows(csv_dump)
@@ -767,16 +764,16 @@ def dump_csv():
 def build_puml():
     ''' Runs plantuml.jar '''
 
-    subprocess.run(["java", "-jar", "plantuml.jar", OUT_FILE, "-tsvg"])
+    subprocess.run(["java", "-jar", "plantuml.jar", GLOBALS.get("OUT_FILE"), "-tsvg"])
 
 
 if __name__ == "__main__":
     # Run it
     parser = argparse.ArgumentParser("port_mapper.py")
-    parser.add_argument("-i", help=f"Input directory. Default is '{IN_DIR}'", default=IN_DIR)
-    parser.add_argument("-o", help=f"Output file. Default is '{OUT_FILE}'", default=OUT_FILE)
+    parser.add_argument("-i", help=f"Input directory. Default is '{GLOBALS.get("IN_DIR")}'", default=GLOBALS.get("IN_DIR"))
+    parser.add_argument("-o", help=f"Output file. Default is '{GLOBALS.get("OUT_FILE")}'", default=GLOBALS.get("OUT_FILE"))
     parser.add_argument("-c", help=f"Include closed connections. Default is False", action="store_true", default=False)
-    parser.add_argument("-x", help=f"Processes to exclude. Default is '{EXCLUDE_FILE}'", default=EXCLUDE_FILE)
+    parser.add_argument("-x", help=f"Processes to exclude. Default is '{GLOBALS.get("EXCLUDE_FILE")}'", default=GLOBALS.get("EXCLUDE_FILE"))
     pargs = parser.parse_args()
 
     main(pargs)
