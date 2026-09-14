@@ -66,9 +66,9 @@ def setup(args):
                 "PARSER" : parse_linux_ps,
                 "FULL_MATCH" : re.compile(r"((?:.(?!\s{2,}))*[^\s])\s+"        # UID
                                            r"([\d]+)\s+"                        # PID
-                                           r"([\d]+)\s+"                        # PPID
+                                           r"([-\d]+)\s+"                       # PPID
                                            r"([\d]+)\s+"                        # C
-                                           r"([^\s]+)\s+"                       # STIME
+                                           r"([^\s]*)\s+"                       # STIME
                                            r"([^\s]+)\s+"                       # TTY
                                            r"([^\s]+)\s+"                       # TIME
                                            r"[\-\/]*((?:.(?!\s{2,}))*[^\s])\s*" # CMD
@@ -100,8 +100,8 @@ def setup(args):
                 "PARSER" : parse_windows_ps,
                 "FULL_MATCH" : re.compile(r"((?:.(?!\s{2,}))*[^\s])\s+"         # UID
                                            r"([\d]+)\s+"                        # PID
-                                           r"([^-\d]+)\s+"                      # PPID
-                                           r"([^\s]+)\s+"                       # STIME
+                                           r"([-\d]+)\s+"                       # PPID
+                                           r"([^\s]*)\s+"                       # STIME
                                            r"[\-\/]*((?:.(?!\s{2,}))*[^\s])\s*" # CMD
                                           , re.IGNORECASE),
             },
