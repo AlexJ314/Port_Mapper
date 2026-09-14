@@ -41,6 +41,7 @@ def main(args):
     write_puml()
     dump_csv()
     build_puml()
+    print("Done")
 
 
 def setup(args):
@@ -63,11 +64,11 @@ def setup(args):
             "LINUX_PS" : {
                 "HEADER" : re.compile(r"UID\s+PID\s+PPID\s+C\s+STIME\s+TTY\s+TIME\s+CMD", re.IGNORECASE),
                 "PARSER" : parse_linux_ps,
-                "FULL_MATCH" : re.compile(r"((?:.(?!\s{2,}))*[^\s])\s+"         # UID
+                "FULL_MATCH" : re.compile(r"((?:.(?!\s{2,}))*[^\s])\s+"        # UID
                                            r"([\d]+)\s+"                        # PID
                                            r"([\d]+)\s+"                        # PPID
                                            r"([\d]+)\s+"                        # C
-                                           r"([\d\:]+)\s+"                      # STIME
+                                           r"([^\s]+)\s+"                       # STIME
                                            r"([^\s]+)\s+"                       # TTY
                                            r"([^\s]+)\s+"                       # TIME
                                            r"[\-\/]*((?:.(?!\s{2,}))*[^\s])\s*" # CMD
@@ -76,7 +77,7 @@ def setup(args):
             "LINUX_NETSTAT" : {
                 "HEADER" : re.compile(r"Proto\s+Recv-Q\s+Send-Q\s+Local Address\s+Foreign Address\s+State\s+PID/Program name\s+Timer", re.IGNORECASE),
                 "PARSER" : parse_linux_netstat,
-                "FULL_MATCH" : re.compile(r"([a-z\d]+)\s+"                              # Proto
+                "FULL_MATCH" : re.compile(r"([a-z\d]+)\s+"                             # Proto
                                            r"([\d]+)\s+"                                # Recv-Q
                                            r"([\d]+)\s+"                                # Send-Q
                                            r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"      # Local host:Port
@@ -89,19 +90,25 @@ def setup(args):
             "WINDOWS_GP" : {
                 "HEADER" : re.compile(r"ProcessId\s+Name\s+CommandLine", re.IGNORECASE),
                 "PARSER" : parse_windows_gp,
-                "FULL_MATCH" : re.compile(r"([\-\d]+)\s+"                   # PID
+                "FULL_MATCH" : re.compile(r"([\-\d]+)\s+"                  # PID
                                            r"((?:.(?!\s{2,}))*[^\s])\s*"    # Process
                                            r"(.*)"                          # CMD
                                           , re.IGNORECASE),
             },
             "WINDOWS_PS" : {
-                "HEADER" : re.compile(r"TODO"),
+                "HEADER" : re.compile(r"UID\s+PID\s+PPID\s+STIME\s+CMD", re.IGNORECASE),
                 "PARSER" : parse_windows_ps,
+                "FULL_MATCH" : re.compile(r"((?:.(?!\s{2,}))*[^\s])\s+"         # UID
+                                           r"([\d]+)\s+"                        # PID
+                                           r"([^-\d]+)\s+"                      # PPID
+                                           r"([^\s]+)\s+"                       # STIME
+                                           r"[\-\/]*((?:.(?!\s{2,}))*[^\s])\s*" # CMD
+                                          , re.IGNORECASE),
             },
             "WINDOWS_NETSTAT" : {
                 "HEADER" : re.compile(r"Proto\s+Local\s+Address\s+Foreign\s+Address\s+State\s+PID", re.IGNORECASE),
                 "PARSER" : parse_windows_netstat,
-                "FULL_MATCH" : re.compile(r"([a-z\d]+)\s+"                          # Proto
+                "FULL_MATCH" : re.compile(r"([a-z\d]+)\s+"                         # Proto
                                            r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"  # Local host:Port
                                            r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"  # Remote host:Port
                                            r"([a-z\d_]*)\s+"                        # State
@@ -115,6 +122,7 @@ def setup(args):
 def read_files():
     ''' Read the files in the input directory '''
 
+    print("Reading input files")
     for fname in os.listdir(GLOBALS.get("IN_DIR")):
         if not os.path.isfile(os.path.join(GLOBALS.get("IN_DIR"), fname)):
             print(f"{fname} is not a file. Skipping")
@@ -147,6 +155,7 @@ def parse_file(fin, host):
         if ftype is None:
             ftype = guess_type(line)
         elif MATCHER.get("TYPE").get(ftype).get("PARSER")(host, line) is None:
+            print(f"Stopped reading at `{line}`")
             break
 
 
@@ -321,8 +330,30 @@ def parse_windows_gp(host, line):
 def parse_windows_ps(host, line):
     ''' Match a Windows ps output '''
 
-    print("TODO Windows ps")
-    return None
+    matched = MATCHER.get("TYPE").get("WINDOWS_PS").get("FULL_MATCH").match(line)
+    if matched is None:
+        return None
+
+    uid = matched.group(1).lower()
+    pid = matched.group(2).lower()
+    ppid = matched.group(3).lower()
+    stime = matched.group(5).lower()
+    args = shlex.split(matched.group(8).lower(), posix=False)
+
+    if args[0] in EXCLUDED:
+        return matched
+
+    SERVER.get(host).get("PS").update({
+        f"{pid}" : {
+            "UID" : uid,
+            "PID" : pid,
+            "PPID" : ppid,
+            "STIME" : stime,
+            "PROCESS" : args[0],
+            "ARGS" : shlex.join(args[1:])
+        }
+    })
+    return matched
 
 
 def parse_windows_netstat(host, line):
@@ -375,6 +406,7 @@ def parse_windows_netstat(host, line):
 def read_exclude():
     ''' Reads excluded processes '''
 
+    print("Reading exclude file")
     try:
         with open(GLOBALS.get("EXCLUDE_FILE"), "r", encoding="utf-8") as fin:
             parse_exclude_file(fin)
@@ -429,6 +461,7 @@ def map_servers():
 def write_puml():
     ''' Write PlantUML to file '''
 
+    print("Writing puml")
     content = convert_to_puml()
     prefix = get_puml_prefix()
     suffix = get_puml_suffix()
@@ -730,6 +763,7 @@ def dump_csv():
         "Destination Host", "Destination Port", "Destination Process", "Destination Args"]
     csv_dump.append(header)
 
+    print("Dumping to csv")
     for (hostname, server) in SERVER_MAP.items():
         for (proc, args) in server.items():
             no_connections = True
@@ -766,7 +800,11 @@ def dump_csv():
 def build_puml():
     ''' Runs plantuml.jar '''
 
-    subprocess.run(["java", "-jar", "plantuml.jar", GLOBALS.get("OUT_FILE"), "-tsvg"])
+    if os.path.isfile("plantuml.jar"):
+        print("Generating diagram with PlantUML")
+        subprocess.run(["java", "-jar", "plantuml.jar", GLOBALS.get("OUT_FILE"), "-tsvg"])
+    else:
+        print("Failed to find 'plantuml.jar' in current directory. Not generating diagram")
 
 
 if __name__ == "__main__":
