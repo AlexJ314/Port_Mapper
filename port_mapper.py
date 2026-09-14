@@ -554,7 +554,9 @@ def end_node(hostname, server):
 def make_unknown_node(hostname, server, _conns):
     ''' How to start an unknown node '''
 
-    ret = f"node \"{puml_safe(hostname)}\" as {node_name(hostname)} {{\n"
+    ret = f"node \" \" as {node_name(hostname)} {{\n"
+    ret += f"  label \"<b>{puml_safe(hostname)}</b>\" as l{node_name(hostname)}\n"
+    ret += f"  {node_name(hostname)} -[hidden]u- l{node_name(hostname)}\n"
 
     for (pp, connections) in server.items():
         name = (port := connections.get("LOCAL_PORT"))
