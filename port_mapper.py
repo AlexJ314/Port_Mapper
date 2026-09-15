@@ -30,6 +30,7 @@ DNS = {}
 SERVER = {}
 SERVER_MAP = {}
 EXCLUDED = []
+CONNECTIONS = {}
 
 
 def main(args):
@@ -39,8 +40,8 @@ def main(args):
     read_files()
     map_servers()
     write_puml()
-    dump_csv()
     build_puml()
+    dump_csv()
     print("Done")
 
 
@@ -54,12 +55,13 @@ def setup(args):
 
     MATCHER.update({
         "HOST" : re.compile(r"([a-z0-9\-]+)", re.IGNORECASE),
-        "BAD_IP" : re.compile(r"(\[*(?:(?:0+\.*\:*)+|"
+        "LOCAL_IP" : re.compile(r"(\[*(?:(?:0+\.*\:*)+|"
                                r"(?:f+\.*\:*)+|"
                                r"(?:\:+0?1?)+|"
                                r"(?:\.+0?1?)+|"
                                r"(?:127\.0\.0\.1)"
                                r")\]*)", re.IGNORECASE),
+        "IPV6" : re.compile(r"([^\.*]+)", re.IGNORECASE),
         "TYPE" : {
             "LINUX_PS" : {
                 "HEADER" : re.compile(r"UID\s+PID\s+PPID\s+C\s+STIME\s+TTY\s+TIME\s+CMD", re.IGNORECASE),
@@ -178,7 +180,7 @@ def guess_type(line):
 def add_dns(hostname, ip):
     ''' Adds a record to the DNS '''
 
-    if MATCHER.get("BAD_IP").fullmatch(ip):
+    if MATCHER.get("LOCAL_IP").fullmatch(ip):
         return
 
     record = DNS.setdefault(ip, [])
@@ -186,24 +188,28 @@ def add_dns(hostname, ip):
         record.append(hostname)
 
 
-def get_dns(hostname, ip, port, proto):
+def get_dns(ip, local_host, local_port, remote_port, state, proto):
     ''' Gets DNS record '''
 
     if ip is None:
         return [None]
 
-    if MATCHER.get("BAD_IP").fullmatch(ip):
-        return [hostname]
+    if MATCHER.get("LOCAL_IP").fullmatch(ip):
+        return [local_host]
 
     if DNS.get(ip) is None and ip not in ('*',):
         unknown = DNS.setdefault("UNKNOWN", {})
         server = unknown.setdefault(ip, {})
-        server.update({f"{port}_{proto}" :
-                            {"LOCAL_HOST" : ip,
-                             "LOCAL_PORT" : port,
-                             "PORT_TYPE" : "port",
-                             "PROTO" : proto,
-        }})
+        proc = server.setdefault(f"{remote_port}_{proto}", {})
+        args = proc.setdefault(f"{remote_port}_{proto}", [])
+        args.append({"LOCAL_HOST" : ip,
+                      "LOCAL_PORT" : remote_port,
+                      "PORT_TYPE" : "port",
+                      "PROTO" : proto,
+                      "STATE" : state,
+                      "REMOTE_HOST" : local_host,
+                      "REMOTE_PORT" : local_port,
+        })
 
     return DNS.get(ip, [ip])
 
@@ -392,6 +398,9 @@ def parse_windows_netstat(host, line):
     if not GLOBALS.get("CLOSED") and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","bound"):
         return matched
 
+    if MATCHER.get("IPV6").fullmatch(local_host) or MATCHER.get("IPV6").fullmatch(remote_host):
+        proto += "6"
+
     new_val = {
         "PROTO" : proto,
         "LOCAL_HOST" : local_host,
@@ -442,7 +451,7 @@ def map_servers():
                 if proc is None:
                     continue
                 # Figure out the process details on the remote host
-                remote_hosts = get_dns(hostname, detail.get("REMOTE_HOST"), detail.get("REMOTE_PORT"), detail.get("PROTO"))
+                remote_hosts = get_dns(detail.get("REMOTE_HOST"), hostname, detail.get("LOCAL_PORT"), detail.get("REMOTE_PORT"), detail.get("STATE"), detail.get("PROTO"))
                 remote_process_many = []
                 remote_args_many = []
                 for remote_host in remote_hosts:
@@ -460,7 +469,7 @@ def map_servers():
                 # Add the connection
                 conn = proc.setdefault("CONNECTIONS", [])
                 conn.append({
-                    "LOCAL_HOST" : get_dns(hostname, detail.get("LOCAL_HOST"), detail.get("LOCAL_PORT"), detail.get("PROTO")),
+                    "LOCAL_HOST" : get_dns(detail.get("LOCAL_HOST"), hostname, detail.get("LOCAL_PORT"), detail.get("LOCAL_PORT"), detail.get("STATE"), detail.get("PROTO")),
                     "LOCAL_PORT" : detail.get("LOCAL_PORT"),
                     "PORT_TYPE" : detail.get("PORT_TYPE"),
                     "PROTO" : detail.get("PROTO"),
@@ -501,25 +510,30 @@ def convert_to_puml():
     ''' Convert server map to PlantUML '''
 
     define_content = []
-    connect_content = []
+    label_to_port = []
     for (hostname, server) in SERVER_MAP.items():
-        define_content.append(make_node(hostname, server, connect_content))
+        define_content.append(make_node(hostname, server, label_to_port))
         for (proc, args) in server.items():
             define_content.append(make_process(hostname, proc, args))
             for (arg, connections) in args.items():
                 define_content.append(make_args(hostname, proc, arg))
                 for conn in connections:
-                    connect_content.append(make_connection(hostname, proc, arg, conn))
-                    connect_content.append(end_connection(hostname, proc, arg, conn))
+                    make_connection(hostname, proc, arg, conn)
                 define_content.append(end_args(hostname, proc, arg))
             define_content.append(end_process(hostname, proc, args))
         define_content.append(end_node(hostname, server))
 
     for (hostname, server) in DNS.get("UNKNOWN").items():
-        define_content.append(make_unknown_node(hostname, server, connect_content))
-        define_content.append(end_unknown_node(hostname, server))
+        define_content.append(make_node(hostname, server, label_to_port, add_label=True))
+        define_content.append(end_node(hostname, server))
 
-    return define_content + connect_content
+    return define_content + label_to_port + get_connections_puml()
+
+
+def get_connections_puml():
+    ''' Returns a puml list of connections '''
+
+    return CONNECTIONS.get("PUML")
 
 
 def puml_name_safe(string):
@@ -582,57 +596,40 @@ def label_name(hostname, port, proto):
     return f"l_{puml_name_safe(hostname)}_{puml_name_safe(port)}_{puml_name_safe(proto)}"
 
 
-def make_node(hostname, server, _conns):
+def make_node(hostname, server, _conns, add_label=False):
     ''' How to start a node '''
 
-    ret = f"node \"{puml_safe(hostname)}\" as {node_name(hostname)} {{\n"
+    ret = ""
 
-    for (pp, connections) in SERVER.get(hostname).get("NETSTAT").items():
-        for connection in connections:
-            name = (port := connection.get("LOCAL_PORT"))
-            if int(port) >= GLOBALS.get("EPHEMERAL"):
-                name = f"<i>{name}</i>"
-            else:
-                name = f"<b>{name}</b>"
-            ret += f"  label \"{name}\" as {label_name(hostname, port, connection.get("PROTO"))}\n"
-            ret += f"  {connection.get("PORT_TYPE")} \" \" as {port_name(hostname, port, connection.get("PROTO"))}\n"
-            _conns.append((f"{label_name(hostname, port, connection.get("PROTO"))}"
-                           f"{connection_type(connection, priority=2)}"
-                           f"{port_name(hostname, port, connection.get("PROTO"))}"))
+    if add_label:
+        ret = f"node \" \" as {node_name(hostname)} {{\n"
+        ret += f"  label \"<b>{puml_safe(hostname)}</b>\" as l{node_name(hostname)}\n"
+        ret += f"  {node_name(hostname)} -[hidden]u- l{node_name(hostname)}\n"
+    else:
+        ret = f"node \"{puml_safe(hostname)}\" as {node_name(hostname)} {{\n"
+
+    for (proc, args) in server.items():
+        for (arg, connections) in args.items():
+            for conn in connections:
+                name = (port := conn.get("LOCAL_PORT"))
+                if int(port) >= GLOBALS.get("EPHEMERAL"):
+                    name = f"<i>{name}</i>"
+                else:
+                    name = f"<b>{name}</b>"
+                ret += f"  label \"{name}\" as {label_name(hostname, port, conn.get("PROTO"))}\n"
+                ret += f"  {conn.get("PORT_TYPE")} \" \" as {port_name(hostname, port, conn.get("PROTO"))}\n"
+
+                label_to_port = (f"{label_name(hostname, port, conn.get("PROTO"))}"
+                                 f"{connection_type(conn, priority=2)}"
+                                 f"{port_name(hostname, port, conn.get("PROTO"))}")
+                if label_to_port not in _conns:
+                    _conns.append(label_to_port)
 
     return ret
 
 
 def end_node(hostname, server):
     ''' How to end a node '''
-
-    return "}"
-
-
-def make_unknown_node(hostname, server, _conns):
-    ''' How to start an unknown node '''
-
-    ret = f"node \" \" as {node_name(hostname)} {{\n"
-    ret += f"  label \"<b>{puml_safe(hostname)}</b>\" as l{node_name(hostname)}\n"
-    ret += f"  {node_name(hostname)} -[hidden]u- l{node_name(hostname)}\n"
-
-    for (pp, connections) in server.items():
-        name = (port := connections.get("LOCAL_PORT"))
-        if int(port) >= GLOBALS.get("EPHEMERAL"):
-            name = f"<i>{name}</i>"
-        else:
-            name = f"<b>{name}</b>"
-        ret += f"  label \"{name}\" as {label_name(hostname, port, connections.get("PROTO"))}\n"
-        ret += f"  {connections.get("PORT_TYPE")} \" \" as {port_name(hostname, port, connections.get("PROTO"))}\n"
-        _conns.append((f"{label_name(hostname, port, connections.get("PROTO"))}"
-                           f"{connection_type(connections, priority=2)}"
-                           f"{port_name(hostname, port, connections.get("PROTO"))}"))
-
-    return ret
-
-
-def end_unknown_node(hostname, server):
-    ''' How to end an unknown node '''
 
     return "}"
 
@@ -689,8 +686,7 @@ def connection_type(conn, priority=2, hidden=False):
 
     if (state := conn.get("STATE")) in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing",):
         style.append("dotted,norank")
-
-    if conn.get("PROTO") not in ("tcp","tcp6",):
+    elif conn.get("PROTO") not in ("tcp","tcp6",):
         style.append("dashed")
 
     for c in conn.get("REMOTE_HOST", []):
@@ -714,7 +710,7 @@ def connection_type(conn, priority=2, hidden=False):
 
 
 def make_connection(hostname, proc, args, conn):
-    ''' How to start a connection '''
+    ''' How to make a connection '''
 
     connections = []
 
@@ -726,17 +722,18 @@ def make_connection(hostname, proc, args, conn):
 
     for remote_host in conn.get("REMOTE_HOST"):
         if (remote_port := conn.get("REMOTE_PORT")) not in ('*', '0'):
-            connections.append((f"{port_name(hostname, local_port, conn.get("PROTO"))}"
-                                f"{connection_type(conn, priority=-1)}"
-                                f"{port_name(remote_host, remote_port, conn.get("PROTO"))}"))
+            puml = (f"{port_name(hostname, local_port, conn.get("PROTO"))}"
+                    f"{connection_type(conn, priority=-1)}"
+                    f"{port_name(remote_host, remote_port, conn.get("PROTO"))}")
 
-    return "\n".join(connections)
+            rpuml = (f"{port_name(remote_host, remote_port, conn.get("PROTO"))}"
+                    f"{connection_type(conn, priority=-1)}"
+                    f"{port_name(hostname, local_port, conn.get("PROTO"))}")
 
+            if puml not in CONNECTIONS.get("PUML", []) and rpuml not in CONNECTIONS.get("PUML", []):
+                connections.append(puml)
 
-def end_connection(hostname, proc, args, conn):
-    ''' How to end a connection '''
-
-    return ""
+    CONNECTIONS.update({"PUML" : CONNECTIONS.get("PUML", []) + connections})
 
 
 def get_puml_prefix():
