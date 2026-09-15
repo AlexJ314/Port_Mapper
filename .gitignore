@@ -46,6 +46,9 @@ pip-delete-this-directory.txt
 *.zip
 *.csv
 *.csv#
+*.ps1
+*.ps
+*.sh
 
 # Unit test / coverage reports
 htmlcov/

@@ -85,9 +85,9 @@ def setup(args):
                                           , re.IGNORECASE),
             },
             "LINUX_NETSTAT" : {
-                "HEADER" : re.compile(r"Proto\s+Recv-Q\s+Send-Q\s+Local Address\s+Foreign Address\s+State\s+PID/Program name\s+Timer", re.IGNORECASE),
+                "HEADER" : re.compile(r"Proto\s+Recv-Q\s+Send-Q\s+Local Address\s+Foreign Address\s+State\s+PID/Program name\s*(?:Timer)?", re.IGNORECASE),
                 "PARSER" : parse_linux_netstat,
-                "FULL_MATCH" : re.compile(r"([a-z\d]+)\s+"                             # Proto
+                "FULL_MATCH" : re.compile(r"([a-z\d]+)\s+"                              # Proto
                                            r"([\d]+)\s+"                                # Recv-Q
                                            r"([\d]+)\s+"                                # Send-Q
                                            r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"      # Local host:Port
@@ -651,6 +651,8 @@ def make_node(hostname, server, _conns, add_label=False):
         for (arg, connections) in args.items():
             for conn in connections:
                 name = (port := conn.get("LOCAL_PORT"))
+                if port.endswith("6"):
+                    name = f"<u>{name}</u>"
                 if int(port) >= GLOBALS.get("EPHEMERAL"):
                     name = f"<i>{name}</i>"
                 else:
@@ -800,6 +802,9 @@ def get_puml_prefix():
     "   <color:#blue>External Port</color>\n"
     "   <color:#green>Listening Port</color>\n"
     "   <color:#red>Bound Socket</color>\n"
+    "   <b>Registered Port</b>\n"
+    "   <i>Ephemeral Port</i>\n"
+    "   <u>IPv6 Port</u>\n"
     "   Solid:  Open, TCP\n"
     "   Dashed: Open, non-TCP\n"
     "   Dotted: Closed\n"
