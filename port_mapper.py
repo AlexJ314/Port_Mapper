@@ -14,7 +14,7 @@
 #   ps -ef > %COMPUTERNAME%_ps.txt
 
 
-import io, os, re, argparse, shlex, subprocess, csv
+import io, os, re, argparse, shlex, subprocess, csv, copy
 
 
 
@@ -22,8 +22,12 @@ GLOBALS = {
     "IN_DIR" : "./input",
     "OUT_FILE" : "./output.puml",
     "EXCLUDE_FILE" : "./exclude.cfg",
+    "INV_EXCLUDE_FILE" : None,
     "EPHEMERAL" : 32768,
-    "CLOSED" : False,
+    "INCLUDE_CLOSED" : False,
+    "PORTS_ONLY" : False,
+    "USERS" : None,
+    "INV_USERS" : None,
 }
 MATCHER = {}
 DNS = {}
@@ -51,7 +55,11 @@ def setup(args):
     GLOBALS.update({"IN_DIR" : args.i})
     GLOBALS.update({"OUT_FILE" : args.o})
     GLOBALS.update({"EXCLUDE_FILE" : args.x})
-    GLOBALS.update({"CLOSED" : args.c})
+    GLOBALS.update({"INV_EXCLUDE_FILE" : args.__dict__.get("!x")})
+    GLOBALS.update({"INCLUDE_CLOSED" : args.c})
+    GLOBALS.update({"PORTS_ONLY" : args.p})
+    GLOBALS.update({"USERS" : args.u})
+    GLOBALS.update({"INV_USERS" : args.__dict__.get("!u")})
 
     MATCHER.update({
         "HOST" : re.compile(r"([a-z0-9\-]+)", re.IGNORECASE),
@@ -234,7 +242,14 @@ def parse_linux_ps(host, line):
         # Skip; it's part of the header
         return matched
 
-    if args[0] in EXCLUDED:
+    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and args[0] in EXCLUDED:
+        return matched
+    if inv_e is not None and args[0] not in EXCLUDED:
+        return matched
+
+    if (users := GLOBALS.get("USERS")) is not None and uid not in users:
+        return matched
+    if (users := GLOBALS.get("INV_USERS")) is not None and uid in users:
         return matched
 
     SERVER.get(host).get("PS").update({
@@ -284,10 +299,12 @@ def parse_linux_netstat(host, line):
         port_type = "portin"
     elif state in ("syn_send", "syn_sent"):
         port_type = "portout"
-    if not GLOBALS.get("CLOSED") and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","bound"):
+    if not GLOBALS.get("INCLUDE_CLOSED") and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","bound"):
         return matched
 
-    if process in EXCLUDED:
+    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and process in EXCLUDED:
+        return matched
+    if inv_e is not None and process not in EXCLUDED:
         return matched
 
     new_val = {
@@ -326,7 +343,9 @@ def parse_windows_gp(host, line):
         # Skip; it's part of the header
         return matched
 
-    if process in EXCLUDED:
+    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and process in EXCLUDED:
+        return matched
+    if inv_e is not None and process not in EXCLUDED:
         return matched
 
     SERVER.get(host).get("PS").update({
@@ -352,7 +371,14 @@ def parse_windows_ps(host, line):
     stime = matched.group(4).lower()
     args = shlex.split(matched.group(5).lower(), posix=False)
 
-    if args[0] in EXCLUDED:
+    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and args[0] in EXCLUDED:
+        return matched
+    if inv_e is not None and args[0] not in EXCLUDED:
+        return matched
+
+    if (users := GLOBALS.get("USERS")) is not None and uid not in users:
+        return matched
+    if (users := GLOBALS.get("INV_USERS")) is not None and uid in users:
         return matched
 
     SERVER.get(host).get("PS").update({
@@ -395,7 +421,7 @@ def parse_windows_netstat(host, line):
         port_type = "portin"
     elif state in ("syn_send", "syn_sent"):
         port_type = "portout"
-    if not GLOBALS.get("CLOSED") and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","bound"):
+    if not GLOBALS.get("INCLUDE_CLOSED") and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","bound"):
         return matched
 
     if MATCHER.get("IPV6").fullmatch(local_host) or MATCHER.get("IPV6").fullmatch(remote_host):
@@ -421,12 +447,19 @@ def parse_windows_netstat(host, line):
 def read_exclude():
     ''' Reads excluded processes '''
 
+    exclude_file = GLOBALS.get("INV_EXCLUDE_FILE")
+    if exclude_file is None:
+        exclude_file = GLOBALS.get("EXCLUDE_FILE")
+    if not os.path.isfile(exclude_file):
+        print(f"Failed to find exclude file `{exclude_file}`")
+        return
+
     print("Reading exclude file")
     try:
-        with open(GLOBALS.get("EXCLUDE_FILE"), "r", encoding="utf-8") as fin:
+        with open(exclude_file, "r", encoding="utf-8") as fin:
             parse_exclude_file(fin)
     except UnicodeError:
-        with open(GLOBALS.get("EXCLUDE_FILE"), "r", encoding="utf-16") as fin:
+        with open(exclude_file, "r", encoding="utf-16") as fin:
             parse_exclude_file(fin)
 
 
@@ -480,6 +513,12 @@ def map_servers():
                     "REMOTE_ARGS" : remote_args_many,
                 })
 
+    if GLOBALS.get("PORTS_ONLY"):
+        for (hostname, server) in copy.deepcopy(SERVER).items():
+            for (pid, details) in server.get("PS").items():
+                if details.get("CONNECTIONS") is None:
+                    del SERVER.get(hostname).get("PS")[pid]
+
     # Map by server > process > args > connections
     #   Instead of server > pid > connections
     for (hostname, server) in SERVER.items():
@@ -523,7 +562,7 @@ def convert_to_puml():
             define_content.append(end_process(hostname, proc, args))
         define_content.append(end_node(hostname, server))
 
-    for (hostname, server) in DNS.get("UNKNOWN").items():
+    for (hostname, server) in DNS.get("UNKNOWN", {}).items():
         define_content.append(make_node(hostname, server, label_to_port, add_label=True))
         define_content.append(end_node(hostname, server))
 
@@ -533,7 +572,7 @@ def convert_to_puml():
 def get_connections_puml():
     ''' Returns a puml list of connections '''
 
-    return CONNECTIONS.get("PUML")
+    return CONNECTIONS.get("PUML", [])
 
 
 def puml_name_safe(string):
@@ -823,10 +862,16 @@ def build_puml():
 if __name__ == "__main__":
     # Run it
     parser = argparse.ArgumentParser("port_mapper.py")
+    user_parser = parser.add_mutually_exclusive_group()
+    exclude_parser = parser.add_mutually_exclusive_group()
     parser.add_argument("-i", help=f"Input directory. Default is '{GLOBALS.get("IN_DIR")}'", default=GLOBALS.get("IN_DIR"))
     parser.add_argument("-o", help=f"Output file. Default is '{GLOBALS.get("OUT_FILE")}'", default=GLOBALS.get("OUT_FILE"))
     parser.add_argument("-c", help=f"Include closed connections. Default is False", action="store_true", default=False)
-    parser.add_argument("-x", help=f"Processes to exclude. Default is '{GLOBALS.get("EXCLUDE_FILE")}'", default=GLOBALS.get("EXCLUDE_FILE"))
+    exclude_parser.add_argument("-x", help=f"Processes to exclude. Default is '{GLOBALS.get("EXCLUDE_FILE")}'", default=GLOBALS.get("EXCLUDE_FILE"))
+    exclude_parser.add_argument("-!x", help=f"Processes to NOT exclude")
+    parser.add_argument("-p", help=f"Only include processes with ports", action="store_true", default=False)
+    user_parser.add_argument("-u", help=f"Only include processes being run by the given user(s)", nargs="+")
+    user_parser.add_argument("-!u", help=f"Only include processes NOT being run by the given user(s)", nargs="+")
     pargs = parser.parse_args()
 
     main(pargs)

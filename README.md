@@ -17,8 +17,14 @@ Run `port_mapper.py -i <input_dir>` to choose the input directory
 Run `port_mapper.py -o <output_file>` to choose the output file
 
 Run `port_mapper.py -x <exlude_file>` to choose the exclude file, that is, which processes are ignored
+ - `-!x` inverts this argument
 
 Run `port_mapper.py -c` to include closed connections
+
+Run `port_mapper.py -p` to only include processes with associated ports
+
+Run `port_mapper.py -u <user1> <user2...>` to only include processes being run by the given user(s)
+ - `-!u` inverts this argument
 
 ## Linux:
  - `sudo netstat -pan > ${HOSTNAME}_netstat.txt`
