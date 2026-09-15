@@ -1,0 +1,4 @@
+Proto Local Address Foreign Address State PID
+udp  100.000.000.3:50000    100.000.000.1:80  closed          1
+tcp  100.000.000.3:600      100.000.000.1:8080                1
+udp  100.000.000.3:443      100.000.000.2:55555  established  2
