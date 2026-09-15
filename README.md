@@ -12,9 +12,11 @@ so filenames of ports and processes from the same server should have the same pr
 It doesn't matter what the rest of the filename is, so long as there's an illegal character
 after the hostname (assuming you don't want the entire filename as the entire hostname).
 
-Run `port_mapper.py -i <input_dir>` to choose the input directory
+Run `port_mapper.py -i <path/to/input_dir>` to choose the input directory(s)
 
-Run `port_mapper.py -o <output_file>` to choose the output file
+Run `port_mapper.py -o <path/to/output_file>` to choose the output file
+
+Run `port_mapper.py -j <path/to/plantuml.jar>` to specify where `plantuml.jar` is
 
 Run `port_mapper.py -x <exlude_file>` to choose the exclude file, that is, which processes are ignored
  - `-!x` inverts this argument

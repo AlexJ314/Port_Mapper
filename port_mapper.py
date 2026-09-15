@@ -19,7 +19,7 @@ import io, os, re, argparse, shlex, subprocess, csv, copy
 
 
 GLOBALS = {
-    "IN_DIR" : "./input",
+    "IN_DIR" : ["./input"],
     "OUT_FILE" : "./output.puml",
     "EXCLUDE_FILE" : "./exclude.cfg",
     "INV_EXCLUDE_FILE" : None,
@@ -28,6 +28,7 @@ GLOBALS = {
     "PORTS_ONLY" : False,
     "USERS" : None,
     "INV_USERS" : None,
+    "PLANT_UML" : "plantuml.jar",
 }
 MATCHER = {}
 DNS = {}
@@ -41,7 +42,7 @@ def main(args):
     ''' Set up and run the thing '''
     setup(args)
     read_exclude()
-    read_files()
+    read_dirs()
     map_servers()
     write_puml()
     build_puml()
@@ -60,6 +61,7 @@ def setup(args):
     GLOBALS.update({"PORTS_ONLY" : args.p})
     GLOBALS.update({"USERS" : args.u})
     GLOBALS.update({"INV_USERS" : args.__dict__.get("!u")})
+    GLOBALS.update({"PLANT_UML" : args.j})
 
     MATCHER.update({
         "HOST" : re.compile(r"([a-z0-9\-]+)", re.IGNORECASE),
@@ -129,13 +131,24 @@ def setup(args):
     })
 
 
-def read_files():
+def read_dirs():
+    ''' Reads each input directory '''
+
+    for in_dir in GLOBALS.get("IN_DIR"):
+        if not os.path.isdir(in_dir):
+            print(f"{in_dir} is not an input directory. Skipping")
+        else:
+            read_files(in_dir)
+
+
+def read_files(in_dir):
     ''' Read the files in the input directory '''
 
-    print("Reading input files")
-    for fname in os.listdir(GLOBALS.get("IN_DIR")):
-        if not os.path.isfile(os.path.join(GLOBALS.get("IN_DIR"), fname)):
-            print(f"{fname} is not a file. Skipping")
+    print(f"Reading {in_dir}")
+
+    for fname in os.listdir(in_dir):
+        if not os.path.isfile(os.path.join(in_dir, fname)):
+            print(f"{fname} is not an input file. Skipping")
             continue
 
         if (host := MATCHER.get("HOST").match(fname)) is None:
@@ -147,11 +160,11 @@ def read_files():
 
         print(f"Reading {fname}")
         try:
-            with open(os.path.join(GLOBALS.get("IN_DIR"), fname), "r", encoding="utf-8") as fin:
+            with open(os.path.join(in_dir, fname), "r", encoding="utf-8") as fin:
                 if parse_file(fin, host) is None:
                     print(f"Failed to determine type of `{fname}`")
         except UnicodeError:
-            with open(os.path.join(GLOBALS.get("IN_DIR"), fname), "r", encoding="utf-16") as fin:
+            with open(os.path.join(in_dir, fname), "r", encoding="utf-16") as fin:
                 if parse_file(fin, host) is None:
                     print(f"Failed to determine type of `{fname}`")
 
@@ -858,11 +871,12 @@ def dump_csv():
 def build_puml():
     ''' Runs plantuml.jar '''
 
-    if os.path.isfile("plantuml.jar"):
+    plantuml = GLOBALS.get("PLANT_UML")
+    if os.path.isfile(plantuml):
         print("Generating diagram with PlantUML")
-        subprocess.run(["java", "-jar", "plantuml.jar", GLOBALS.get("OUT_FILE"), "-tsvg"])
+        subprocess.run(["java", "-jar", plantuml, GLOBALS.get("OUT_FILE"), "-tsvg"])
     else:
-        print("Failed to find 'plantuml.jar' in current directory. Not generating diagram")
+        print(f"Failed to find '{plantuml}' Not generating diagram")
 
 
 if __name__ == "__main__":
@@ -870,8 +884,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("port_mapper.py")
     user_parser = parser.add_mutually_exclusive_group()
     exclude_parser = parser.add_mutually_exclusive_group()
-    parser.add_argument("-i", help=f"Input directory. Default is '{GLOBALS.get("IN_DIR")}'", default=GLOBALS.get("IN_DIR"))
+    parser.add_argument("-i", help=f"Input directory(s). Default is '{" '".join(GLOBALS.get("IN_DIR"))}'", default=GLOBALS.get("IN_DIR"), nargs="+")
     parser.add_argument("-o", help=f"Output file. Default is '{GLOBALS.get("OUT_FILE")}'", default=GLOBALS.get("OUT_FILE"))
+    parser.add_argument("-j", help=f"Path to 'plantuml.jar'. Default is '{GLOBALS.get("PLANT_UML")}'", default=GLOBALS.get("PLANT_UML"))
     parser.add_argument("-c", help=f"Include closed connections. Default is False", action="store_true", default=False)
     exclude_parser.add_argument("-x", help=f"Processes to exclude. Default is '{GLOBALS.get("EXCLUDE_FILE")}'", default=GLOBALS.get("EXCLUDE_FILE"))
     exclude_parser.add_argument("-!x", help=f"Processes to NOT exclude")
