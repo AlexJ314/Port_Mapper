@@ -599,7 +599,7 @@ def puml_safe(string, unicode=True):
             if unicode:
                 c = f"<U+{ord(c):04X}>"
             else:
-                c = f"_{ord(c):04X}"
+                c = f"U{ord(c):04X}"
         ret += c
 
     return ret
@@ -651,7 +651,7 @@ def make_node(hostname, server, _conns, add_label=False):
         for (arg, connections) in args.items():
             for conn in connections:
                 name = (port := conn.get("LOCAL_PORT"))
-                if port.endswith("6"):
+                if conn.get("PROTO").endswith("6"):
                     name = f"<u>{name}</u>"
                 if int(port) >= GLOBALS.get("EPHEMERAL"):
                     name = f"<i>{name}</i>"
