@@ -477,12 +477,8 @@ def map_servers():
     for (hostname, server) in SERVER.items():
         for (pp, details) in server.get("NETSTAT").items():
             for detail in details:
-                pid = detail.get("PID")
-                if pid is None:
-                    continue
-                proc = server.get("PS").get(pid)
-                if proc is None:
-                    continue
+                pid = detail.setdefault("PID", -1)
+                proc = server.get("PS").setdefault(pid, {"PID" : pid, "PROCESS" : "Unknown", "ARGS" : ""})
                 # Figure out the process details on the remote host
                 remote_hosts = get_dns(detail.get("REMOTE_HOST"), hostname, detail.get("LOCAL_PORT"), detail.get("REMOTE_PORT"), detail.get("STATE"), detail.get("PROTO"))
                 remote_process_many = []
@@ -620,7 +616,7 @@ def process_name(hostname, name, args):
 def arg_name(hostname, name, args):
     ''' Return puml arg name '''
 
-    return f"cd_{puml_name_safe(hostname)}_{puml_name_safe(name)}_{puml_name_safe(hash(args))}"
+    return f"cd_{puml_name_safe(hostname)}_{puml_name_safe(name)}_{puml_name_safe(args)}"
 
 
 def port_name(hostname, port, proto):
@@ -638,14 +634,14 @@ def label_name(hostname, port, proto):
 def make_node(hostname, server, _conns, add_label=False):
     ''' How to start a node '''
 
-    ret = ""
+    ret = []
 
     if add_label:
-        ret = f"node \" \" as {node_name(hostname)} {{\n"
-        ret += f"  label \"<b>{puml_safe(hostname)}</b>\" as l{node_name(hostname)}\n"
-        ret += f"  {node_name(hostname)} -[hidden]u- l{node_name(hostname)}\n"
+        ret.append(f"node \" \" as {node_name(hostname)} {{")
+        ret.append(f"  label \"<b>{puml_safe(hostname)}</b>\" as l{node_name(hostname)}")
+        ret.append(f"  {node_name(hostname)} -[hidden]u- l{node_name(hostname)}")
     else:
-        ret = f"node \"{puml_safe(hostname)}\" as {node_name(hostname)} {{\n"
+        ret.append(f"node \"{puml_safe(hostname)}\" as {node_name(hostname)} {{")
 
     for (proc, args) in server.items():
         for (arg, connections) in args.items():
@@ -657,8 +653,13 @@ def make_node(hostname, server, _conns, add_label=False):
                     name = f"<i>{name}</i>"
                 else:
                     name = f"<b>{name}</b>"
-                ret += f"  label \"{name}\" as {label_name(hostname, port, conn.get("PROTO"))}\n"
-                ret += f"  {conn.get("PORT_TYPE")} \" \" as {port_name(hostname, port, conn.get("PROTO"))}\n"
+
+                label_puml = f"  label \"{name}\" as {label_name(hostname, port, conn.get("PROTO"))}"
+                port_puml = f"  {conn.get("PORT_TYPE")} \" \" as {port_name(hostname, port, conn.get("PROTO"))}"
+
+                if label_puml not in ret and port_puml not in ret:
+                    ret.append(label_puml)
+                    ret.append(port_puml)
 
                 label_to_port = (f"{label_name(hostname, port, conn.get("PROTO"))}"
                                  f"{connection_type(conn, priority=2)}"
@@ -666,7 +667,7 @@ def make_node(hostname, server, _conns, add_label=False):
                 if label_to_port not in _conns:
                     _conns.append(label_to_port)
 
-    return ret
+    return "\n".join(ret)
 
 
 def end_node(hostname, server):
@@ -805,7 +806,7 @@ def get_puml_prefix():
     "   <b>Registered Port</b>\n"
     "   <i>Ephemeral Port</i>\n"
     "   <u>IPv6 Port</u>\n"
-    "   Solid:  Open, TCP\n"
+    "   Solid: Open, TCP\n"
     "   Dashed: Open, non-TCP\n"
     "   Dotted: Closed\n"
     "end legend\n")
