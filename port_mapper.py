@@ -454,18 +454,18 @@ def map_servers():
                 remote_hosts = get_dns(detail.get("REMOTE_HOST"), hostname, detail.get("LOCAL_PORT"), detail.get("REMOTE_PORT"), detail.get("STATE"), detail.get("PROTO"))
                 remote_process_many = []
                 remote_args_many = []
-                for remote_host in remote_hosts:
-                    remote_pids = []
-                    for remote_connection in SERVER.get(remote_host, {}).get("NETSTAT", {}).get(f"{detail.get("REMOTE_PORT")}_{detail.get("PROTO")}", []):
-                        remote_pids.append(remote_connection.get("PID"))
-                    remote_process = []
-                    remote_args = []
-                    for remote_pid in remote_pids:
-                        remote_detail = SERVER.get(remote_host, {}).get("PS", {}).get(remote_pid, {})
-                        remote_process.append(remote_detail.get("PROCESS"))
-                        remote_args.append(remote_detail.get("ARGS"))
-                    remote_process_many.append(remote_process)
-                    remote_args_many.append(remote_args)
+                #for remote_host in remote_hosts:
+                #    remote_pids = []
+                #    for remote_connection in SERVER.get(remote_host, {}).get("NETSTAT", {}).get(f"{detail.get("REMOTE_PORT")}_{detail.get("PROTO")}", []):
+                #        remote_pids.append(remote_connection.get("PID"))
+                #    remote_process = []
+                #    remote_args = []
+                #    for remote_pid in remote_pids:
+                #        remote_detail = SERVER.get(remote_host, {}).get("PS", {}).get(remote_pid, {})
+                #        remote_process.append(remote_detail.get("PROCESS"))
+                #        remote_args.append(remote_detail.get("ARGS"))
+                #    remote_process_many.append(remote_process)
+                #    remote_args_many.append(remote_args)
                 # Add the connection
                 conn = proc.setdefault("CONNECTIONS", [])
                 conn.append({
