@@ -14,7 +14,7 @@
 #   ps -ef > %COMPUTERNAME%_ps.txt
 
 
-import io, os, re, argparse, shlex, subprocess, csv, copy
+import io, os, re, argparse, shlex, subprocess, csv
 
 
 
@@ -308,7 +308,7 @@ def parse_linux_netstat(host, line):
         return matched
 
     port_type = "port"
-    if state in ("listening", "listen", "syn_received", "syn_recv") or remote_port in ("*", "0"):
+    if state in ("listening", "listen", "syn_received", "syn_recv") or remote_port in ("*", "0", ""):
         port_type = "portin"
     elif state in ("syn_send", "syn_sent"):
         port_type = "portout"
@@ -430,7 +430,7 @@ def parse_windows_netstat(host, line):
         return matched
 
     port_type = "port"
-    if state in ("listening", "listen", "syn_received", "syn_recv") or remote_port in ("*", "0"):
+    if state in ("listening", "listen", "syn_received", "syn_recv") or remote_port in ("*", "0", ""):
         port_type = "portin"
     elif state in ("syn_send", "syn_sent"):
         port_type = "portout"
@@ -523,10 +523,10 @@ def map_servers():
                 })
 
     if GLOBALS.get("PORTS_ONLY"):
-        for (hostname, server) in copy.deepcopy(SERVER).items():
-            for (pid, details) in server.get("PS").items():
-                if details.get("CONNECTIONS") is None:
-                    del SERVER.get(hostname).get("PS")[pid]
+        for hostname in list(SERVER.keys()):
+            for pid in list((ps := SERVER.get(hostname).get("PS")).keys()):
+                if len(ps.get(pid).get("CONNECTIONS", [])) < 1:
+                    del ps[pid]
 
     # Map by server > process > args > connections
     #   Instead of server > pid > connections
@@ -537,7 +537,7 @@ def map_servers():
             args = detail.get("ARGS")
             s_proc = s_host.setdefault(proc, {})
             s_args = s_proc.setdefault(args, [])
-            s_args += detail.get("CONNECTIONS", [])
+            s_args += detail.setdefault("CONNECTIONS", [])
 
 
 def write_puml():
@@ -776,7 +776,7 @@ def make_connection(hostname, proc, args, conn):
                         f"{label_name(hostname, local_port, conn.get("PROTO"))}"))
 
     for remote_host in conn.get("REMOTE_HOST"):
-        if (remote_port := conn.get("REMOTE_PORT")) not in ('*', '0'):
+        if (remote_port := conn.get("REMOTE_PORT")) not in ("*", "0", ""):
             puml = (f"{port_name(hostname, local_port, conn.get("PROTO"))}"
                     f"{connection_type(conn, priority=-1)}"
                     f"{port_name(remote_host, remote_port, conn.get("PROTO"))}")
@@ -788,7 +788,7 @@ def make_connection(hostname, proc, args, conn):
             if puml not in CONNECTIONS.get("PUML", []) and rpuml not in CONNECTIONS.get("PUML", []):
                 connections.append(puml)
 
-    CONNECTIONS.update({"PUML" : CONNECTIONS.get("PUML", []) + connections})
+    CONNECTIONS.setdefault("PUML", []).extend(connections)
 
 
 def get_puml_prefix():
