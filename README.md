@@ -22,11 +22,19 @@ Run `port_mapper.py -x <exlude_file>` to choose the exclude file, that is, which
  - `-!x` inverts this argument
 
 Run `port_mapper.py -c` to include closed connections
+ - `-!c` includes ONLY closed connections
 
 Run `port_mapper.py -p` to only include processes with associated ports
+ - `-!p` inverts this argument
 
 Run `port_mapper.py -u <user1> <user2...>` to only include processes being run by the given user(s)
  - `-!u` inverts this argument
+
+Run `port_mapper.py -s <state1> <state2...>` to only include the given state(s)
+ - `-!s` inverts this argument
+
+Run `port_mapper.py -l <proto1> <proto2...>` to only include the given protocol(s)
+ - `-!l` inverts this argument
 
 ## Linux:
  - `sudo netstat -pan > ${HOSTNAME}_netstat.txt`

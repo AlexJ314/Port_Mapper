@@ -25,10 +25,16 @@ GLOBALS = {
     "INV_EXCLUDE_FILE" : None,
     "EPHEMERAL" : 32768,
     "INCLUDE_CLOSED" : False,
+    "INV_INCLUDE_CLOSED" : False,
     "PORTS_ONLY" : False,
+    "INV_PORTS_ONLY" : False,
     "USERS" : None,
     "INV_USERS" : None,
     "PLANT_UML" : "plantuml.jar",
+    "STATES" : None,
+    "INV_STATES" : None,
+    "PROTOS" : None,
+    "INV_PROTOS" : None,
 }
 MATCHER = {}
 DNS = {}
@@ -58,10 +64,16 @@ def setup(args):
     GLOBALS.update({"EXCLUDE_FILE" : args.x})
     GLOBALS.update({"INV_EXCLUDE_FILE" : args.__dict__.get("!x")})
     GLOBALS.update({"INCLUDE_CLOSED" : args.c})
+    GLOBALS.update({"INV_INCLUDE_CLOSED" : args.__dict__.get("!c")})
     GLOBALS.update({"PORTS_ONLY" : args.p})
+    GLOBALS.update({"INV_PORTS_ONLY" : args.__dict__.get("!p")})
     GLOBALS.update({"USERS" : args.u})
     GLOBALS.update({"INV_USERS" : args.__dict__.get("!u")})
     GLOBALS.update({"PLANT_UML" : args.j})
+    GLOBALS.update({"STATES" : args.s})
+    GLOBALS.update({"INV_STATES" : args.__dict__.get("!s")})
+    GLOBALS.update({"PROTOS" : args.l})
+    GLOBALS.update({"INV_PROTOS" : args.__dict__.get("!l")})
 
     MATCHER.update({
         "HOST" : re.compile(r"([a-z0-9\-]+)", re.IGNORECASE),
@@ -198,41 +210,10 @@ def guess_type(line):
     return None
 
 
-def add_dns(hostname, ip):
-    ''' Adds a record to the DNS '''
+def closed_states():
+    ''' What to consider closed states '''
 
-    if MATCHER.get("LOCAL_IP").fullmatch(ip):
-        return
-
-    record = DNS.setdefault(ip, [])
-    if hostname not in record:
-        record.append(hostname)
-
-
-def get_dns(ip, local_host, local_port, remote_port, state, proto):
-    ''' Gets DNS record '''
-
-    if ip is None:
-        return [None]
-
-    if MATCHER.get("LOCAL_IP").fullmatch(ip):
-        return [local_host]
-
-    if DNS.get(ip) is None and ip not in ('*',):
-        unknown = DNS.setdefault("UNKNOWN", {})
-        server = unknown.setdefault(ip, {})
-        proc = server.setdefault(f"{remote_port}_{proto}", {})
-        args = proc.setdefault(f"{remote_port}_{proto}", [])
-        args.append({"LOCAL_HOST" : ip,
-                      "LOCAL_PORT" : remote_port,
-                      "PORT_TYPE" : "port",
-                      "PROTO" : proto,
-                      "STATE" : state,
-                      "REMOTE_HOST" : local_host,
-                      "REMOTE_PORT" : local_port,
-        })
-
-    return DNS.get(ip, [ip])
+    return ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing",)
 
 
 def parse_linux_ps(host, line):
@@ -312,12 +293,26 @@ def parse_linux_netstat(host, line):
         port_type = "portin"
     elif state in ("syn_send", "syn_sent"):
         port_type = "portout"
-    if not GLOBALS.get("INCLUDE_CLOSED") and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","bound"):
+
+    if not GLOBALS.get("INV_INCLUDE_CLOSED"):
+        if not GLOBALS.get("INCLUDE_CLOSED") and state in closed_states():
+            return matched
+    elif state not in closed_states():
         return matched
 
     if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and process in EXCLUDED:
         return matched
     if inv_e is not None and process not in EXCLUDED:
+        return matched
+
+    if (states := GLOBALS.get("STATES")) is not None and state not in states:
+        return matched
+    if (states := GLOBALS.get("INV_STATES")) is not None and state in states:
+        return matched
+
+    if (protos := GLOBALS.get("PROTOS")) is not None and proto not in protos:
+        return matched
+    if (protos := GLOBALS.get("INV_PROTOS")) is not None and proto in protos:
         return matched
 
     new_val = {
@@ -434,11 +429,25 @@ def parse_windows_netstat(host, line):
         port_type = "portin"
     elif state in ("syn_send", "syn_sent"):
         port_type = "portout"
-    if not GLOBALS.get("INCLUDE_CLOSED") and state in ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","bound"):
+
+    if not GLOBALS.get("INV_INCLUDE_CLOSED"):
+        if not GLOBALS.get("INCLUDE_CLOSED") and state in closed_states():
+            return matched
+    elif state not in closed_states():
         return matched
 
     if MATCHER.get("IPV6").fullmatch(local_host) or MATCHER.get("IPV6").fullmatch(remote_host):
         proto += "6"
+
+    if (states := GLOBALS.get("STATES")) is not None and state not in states:
+        return matched
+    if (states := GLOBALS.get("INV_STATES")) is not None and state in states:
+        return matched
+
+    if (protos := GLOBALS.get("PROTOS")) is not None and proto not in protos:
+        return matched
+    if (protos := GLOBALS.get("INV_PROTOS")) is not None and proto in protos:
+        return matched
 
     new_val = {
         "PROTO" : proto,
@@ -523,10 +532,12 @@ def map_servers():
                     "REMOTE_ARGS" : remote_args_many,
                 })
 
-    if GLOBALS.get("PORTS_ONLY"):
+    if GLOBALS.get("PORTS_ONLY") or GLOBALS.get("INV_PORTS_ONLY"):
         for hostname in list(SERVER.keys()):
             for pid in list((ps := SERVER.get(hostname).get("PS")).keys()):
-                if len(ps.get(pid).get("CONNECTIONS", [])) < 1:
+                if GLOBALS.get("PORTS_ONLY") and len(ps.get(pid).get("CONNECTIONS", [])) < 1 :
+                    del ps[pid]
+                if GLOBALS.get("INV_PORTS_ONLY") and len(ps.get(pid).get("CONNECTIONS", [])) >= 1 :
                     del ps[pid]
 
     # Map by server > process > args > connections
@@ -539,6 +550,43 @@ def map_servers():
             s_proc = s_host.setdefault(proc, {})
             s_args = s_proc.setdefault(args, [])
             s_args += detail.setdefault("CONNECTIONS", [])
+
+
+def add_dns(hostname, ip):
+    ''' Adds a record to the DNS '''
+
+    if MATCHER.get("LOCAL_IP").fullmatch(ip):
+        return
+
+    record = DNS.setdefault(ip, [])
+    if hostname not in record:
+        record.append(hostname)
+
+
+def get_dns(ip, local_host, local_port, remote_port, state, proto):
+    ''' Gets DNS record '''
+
+    if ip is None:
+        return [None]
+
+    if MATCHER.get("LOCAL_IP").fullmatch(ip):
+        return [local_host]
+
+    if DNS.get(ip) is None and ip not in ('*',):
+        unknown = DNS.setdefault("UNKNOWN", {})
+        server = unknown.setdefault(ip, {})
+        proc = server.setdefault(f"{remote_port}_{proto}", {})
+        args = proc.setdefault(f"{remote_port}_{proto}", [])
+        args.append({"LOCAL_HOST" : ip,
+                     "LOCAL_PORT" : remote_port,
+                     "PORT_TYPE" : "port",
+                     "PROTO" : proto,
+                     "STATE" : state,
+                     "REMOTE_HOST" : local_host,
+                     "REMOTE_PORT" : local_port,
+        })
+
+    return DNS.get(ip, [ip])
 
 
 def write_puml():
@@ -570,7 +618,8 @@ def convert_to_puml():
                     make_connection(hostname, proc, arg, conn)
                 define_content.append(end_args(hostname, proc, arg))
             define_content.append(end_process(hostname, proc, args))
-        define_content.append(end_node(hostname, server))
+        if not remove_empty_node(define_content):
+            define_content.append(end_node(hostname, server))
 
     for (hostname, server) in DNS.get("UNKNOWN", {}).items():
         define_content.append(make_node(hostname, server, label_to_port, add_label=True))
@@ -688,6 +737,16 @@ def end_node(hostname, server):
     ''' How to end a node '''
 
     return "}"
+
+
+def remove_empty_node(content):
+    ''' Removes an empty node from the content list '''
+
+    if content[-1].strip().startswith("node \""):
+        content.pop(-1)
+        return True
+
+    return False
 
 
 def make_process(hostname, name, args):
@@ -884,20 +943,37 @@ def build_puml():
         print(f"Failed to find '{plantuml}' Not generating diagram")
 
 
-if __name__ == "__main__":
-    # Run it
+def build_arg_parse():
+    ''' Build Arg Parse '''
+
     parser = argparse.ArgumentParser("port_mapper.py")
-    user_parser = parser.add_mutually_exclusive_group()
     exclude_parser = parser.add_mutually_exclusive_group()
+    port_parser = parser.add_mutually_exclusive_group()
+    user_parser = parser.add_mutually_exclusive_group()
+    state_parser = parser.add_mutually_exclusive_group()
+    proto_parser = parser.add_mutually_exclusive_group()
+
     parser.add_argument("-i", help=f"Input directory(s). Default is '{" '".join(GLOBALS.get("IN_DIR"))}'", default=GLOBALS.get("IN_DIR"), nargs="+")
     parser.add_argument("-o", help=f"Output file. Default is '{GLOBALS.get("OUT_FILE")}'", default=GLOBALS.get("OUT_FILE"))
     parser.add_argument("-j", help=f"Path to 'plantuml.jar'. Default is '{GLOBALS.get("PLANT_UML")}'", default=GLOBALS.get("PLANT_UML"))
-    parser.add_argument("-c", help=f"Include closed connections. Default is False", action="store_true", default=False)
     exclude_parser.add_argument("-x", help=f"Processes to exclude. Default is '{GLOBALS.get("EXCLUDE_FILE")}'", default=GLOBALS.get("EXCLUDE_FILE"))
     exclude_parser.add_argument("-!x", help=f"Processes to NOT exclude")
-    parser.add_argument("-p", help=f"Only include processes with ports", action="store_true", default=False)
+    port_parser.add_argument("-p", help=f"Only include processes with ports", action="store_true", default=False)
+    port_parser.add_argument("-!p", help=f"Only include processes WITHOUT ports", action="store_true", default=False)
     user_parser.add_argument("-u", help=f"Only include processes being run by the given user(s)", nargs="+")
     user_parser.add_argument("-!u", help=f"Only include processes NOT being run by the given user(s)", nargs="+")
-    pargs = parser.parse_args()
+    state_parser.add_argument("-c", help=f"Include closed connections. Default is False", action="store_true", default=False)
+    state_parser.add_argument("-!c", help=f"Include ONLY closed connections. Default is False", action="store_true", default=False)
+    state_parser.add_argument("-s", help=f"Only include the given state(s)", nargs="+")
+    state_parser.add_argument("-!s", help=f"Only include NOT the given state(s)", nargs="+")
+    proto_parser.add_argument("-l", help=f"Only include the given protocol(s)", nargs="+")
+    proto_parser.add_argument("-!l", help=f"Only include NOT the given protocol(s)", nargs="+")
+
+    return parser
+
+
+if __name__ == "__main__":
+    # Run it
+    pargs = build_arg_parse().parse_args()
 
     main(pargs)
