@@ -44,5 +44,4 @@ Run `port_mapper.py -u <user1> <user2...>` to only include processes being run b
    - To be clear, this `ps` is a port of Linux's `ps`, NOT an alias of powershell's `Get-Process`
 
 ## ToDo:
- - Parse Windows ps outputs
  - Make the svg interactive such that clicking nodes and connections highlights the connections
