@@ -496,18 +496,19 @@ def map_servers():
                 remote_hosts = get_dns(detail.get("REMOTE_HOST"), hostname, detail.get("LOCAL_PORT"), detail.get("REMOTE_PORT"), detail.get("STATE"), detail.get("PROTO"))
                 remote_process_many = []
                 remote_args_many = []
-                #for remote_host in remote_hosts:
-                #    remote_pids = []
-                #    for remote_connection in SERVER.get(remote_host, {}).get("NETSTAT", {}).get(f"{detail.get("REMOTE_PORT")}_{detail.get("PROTO")}", []):
-                #        remote_pids.append(remote_connection.get("PID"))
-                #    remote_process = []
-                #    remote_args = []
-                #    for remote_pid in remote_pids:
-                #        remote_detail = SERVER.get(remote_host, {}).get("PS", {}).get(remote_pid, {})
-                #        remote_process.append(remote_detail.get("PROCESS"))
-                #        remote_args.append(remote_detail.get("ARGS"))
-                #    remote_process_many.append(remote_process)
-                #    remote_args_many.append(remote_args)
+                for remote_host in remote_hosts:
+                    remote_pids = []
+                    for rc in SERVER.get(remote_host, {}).get("NETSTAT", {}).get(f"{detail.get("REMOTE_PORT")}_{detail.get("PROTO")}", []):
+                        if hostname in get_dns(rc.get("REMOTE_HOST"), rc.get("LOCAL_HOST"), rc.get("LOCAL_PORT"), rc.get("REMOTE_PORT"), rc.get("STATE"), rc.get("PROTO")):
+                            remote_pids.append(rc.get("PID"))
+                    remote_process = []
+                    remote_args = []
+                    for remote_pid in remote_pids:
+                        remote_detail = SERVER.get(remote_host, {}).get("PS", {}).get(remote_pid, {})
+                        remote_process.append(remote_detail.get("PROCESS"))
+                        remote_args.append(remote_detail.get("ARGS"))
+                    remote_process_many.append(remote_process)
+                    remote_args_many.append(remote_args)
                 # Add the connection
                 conn = proc.setdefault("CONNECTIONS", [])
                 conn.append({
@@ -767,13 +768,16 @@ def connection_type(conn, priority=2, hidden=False):
 def make_connection(hostname, proc, args, conn):
     ''' How to make a connection '''
 
-    connections = []
+    connections = CONNECTIONS.setdefault("PUML", [])
 
     local_port = conn.get("LOCAL_PORT")
 
-    connections.append((f"{arg_name(hostname, proc, args)}"
-                        f"{connection_type(conn, priority=2)}"
-                        f"{label_name(hostname, local_port, conn.get("PROTO"))}"))
+    puml = (f"{arg_name(hostname, proc, args)}"
+            f"{connection_type(conn, priority=2)}"
+            f"{label_name(hostname, local_port, conn.get("PROTO"))}")
+
+    if puml not in connections:
+        connections.append(puml)
 
     for remote_host in conn.get("REMOTE_HOST"):
         if (remote_port := conn.get("REMOTE_PORT")) not in ("*", "0", ""):
@@ -785,10 +789,8 @@ def make_connection(hostname, proc, args, conn):
                     f"{connection_type(conn, priority=-1)}"
                     f"{port_name(hostname, local_port, conn.get("PROTO"))}")
 
-            if puml not in CONNECTIONS.get("PUML", []) and rpuml not in CONNECTIONS.get("PUML", []):
+            if puml not in connections and rpuml not in connections:
                 connections.append(puml)
-
-    CONNECTIONS.setdefault("PUML", []).extend(connections)
 
 
 def get_puml_prefix():
@@ -837,35 +839,38 @@ def get_puml_suffix():
 def dump_csv():
     ''' Dump connections to csv '''
 
-    csv_dump = []
-
-    header = ["Protocol", "State", "Source Host", "Source Port", "Source Process", "Source Args",
-        "Destination Host", "Destination Port", "Destination Process", "Destination Args"]
-    csv_dump.append(header)
-
     print("Dumping to csv")
-    for (hostname, server) in SERVER_MAP.items():
-        for (proc, args) in server.items():
-            no_connections = True
-            for (arg, connections) in args.items():
-                for conn in connections:
-                    for (remote_host, (remote_process, remote_args)) in zip(conn.get("REMOTE_HOST"), zip(conn.get("REMOTE_PROCESS"), conn.get("REMOTE_ARGS"))):
-                        for (p, a) in zip(remote_process, remote_args):
-                            no_connections = False
-                            row = [conn.get("PROTO"), conn.get("STATE"), hostname, conn.get("LOCAL_PORT"), proc, arg,
-                                remote_host, conn.get("REMOTE_PORT"), p, a]
-                            csv_dump.append(row)
-            if no_connections:
-                row = ["", "", hostname, "", proc, arg, "", "", "", ""]
-                csv_dump.append(row)
+
+    header = ["Protocol", "State", "Source Host", "Source Process", "Source Args", "Source Port",
+        "Destination Host", "Destination Process", "Destination Args", "Destination Port"]
 
     split_fname = GLOBALS.get("OUT_FILE").split(".")
     if len(split_fname) > 1:
         split_fname = split_fname[:-1]
     csv_file = f"{".".join(split_fname)}.csv"
+
     with open(csv_file, "w", encoding="utf-8", newline='') as fout:
         csv_writer = csv.writer(fout, quoting=csv.QUOTE_ALL)
-        csv_writer.writerows(csv_dump)
+        csv_writer.writerow(header)
+        for (hostname, server) in SERVER_MAP.items():
+            for (proc, args) in server.items():
+                no_connections = True
+                for (arg, connections) in args.items():
+                    for conn in connections:
+                        for (remote_host, (remote_process, remote_args)) in zip(conn.get("REMOTE_HOST"), zip(conn.get("REMOTE_PROCESS"), conn.get("REMOTE_ARGS"))):
+                            if len(remote_process) < 1:
+                                remote_process = [""]
+                            if len(remote_args) < 1:
+                                remote_args = [""]
+                            for (p, a) in zip(remote_process, remote_args):
+                                no_connections = False
+                                row = [conn.get("PROTO"), conn.get("STATE"), hostname, proc, arg, conn.get("LOCAL_PORT"),
+                                    remote_host, p, a, conn.get("REMOTE_PORT")]
+                                csv_writer.writerow(row)
+
+                if no_connections:
+                    row = ["", "", hostname, proc, arg, "", "", "", "", ""]
+                    csv_writer.writerow(row)
 
 
 def build_puml():
