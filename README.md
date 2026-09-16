@@ -40,16 +40,16 @@ Run `port_mapper.py -l <proto1> <proto2...>` to only include the given protocol(
  - `sudo netstat -pan > ${HOSTNAME}_netstat.txt`
  - `sudo ps -ef > ${HOSTNAME}_ps.txt`
 
-## Windows (powershell, preferred):
- - `netstat -anoq > ${Env:COMPUTERNAME}_netstat.txt`
- - `Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
-   - **OR**
- - `Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
-
-## Windows (cmd):
+## Windows (cmd), preferred:
  - `netstat -anoq > %COMPUTERNAME%_netstat.txt`
  - `ps -ef > %COMPUTERNAME%_ps.txt`
    - To be clear, this `ps` is a port of Linux's `ps`, NOT an alias of powershell's `Get-Process`
+
+## Windows (powershell):
+ - `netstat -anoq > ${Env:COMPUTERNAME}_netstat.txt`
+ - `Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
+   - **OR**
+ - `Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
 
 ## ToDo:
  - Make the svg interactive such that clicking nodes and connections highlights the connections
