@@ -18,6 +18,9 @@ Run `port_mapper.py -o <path/to/output_file>` to choose the output file
 
 Run `port_mapper.py -j <path/to/plantuml.jar>` to specify where `plantuml.jar` is
 
+Run `port_mapper.py -e` to NOT mark ephemeral ports in the csv
+ - This will probably make your csv massive
+
 Run `port_mapper.py -x <exlude_file>` to choose the exclude file, that is, which processes are ignored
  - `-!x` inverts this argument
 
@@ -40,7 +43,7 @@ Run `port_mapper.py -l <proto1> <proto2...>` to only include the given protocol(
  - `sudo netstat -pan > ${HOSTNAME}_netstat.txt`
  - `sudo ps -ef > ${HOSTNAME}_ps.txt`
 
-## Windows (cmd), preferred:
+## Windows (cmd, preferred):
  - `netstat -anoq > %COMPUTERNAME%_netstat.txt`
  - `ps -ef > %COMPUTERNAME%_ps.txt`
    - To be clear, this `ps` is a port of Linux's `ps`, NOT an alias of powershell's `Get-Process`
