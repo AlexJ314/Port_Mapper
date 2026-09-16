@@ -1,5 +1,5 @@
 Proto Local Address Foreign Address State PID
-tcp   100.000.000.1:1      100.000.000.1:*  listen         1
+tcp   100.000.000.1:1      0.0.0.0:0        listen         1
 tcp   100.000.000.1:20     100.000.000.1:10                3
 tcp   100.000.000.1:10     100.000.000.1:20                3
 tcp6  100.000.000.1:300    100.000.000.2:200  established  4
