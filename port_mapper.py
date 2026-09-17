@@ -35,6 +35,7 @@ GLOBALS = {
     "INV_STATES" : None,
     "PROTOS" : None,
     "INV_PROTOS" : None,
+    "REPLACE_EPHEMERAL" : True,
     "NO_EPHEMERAL" : True,
 }
 MATCHER = {}
@@ -75,6 +76,7 @@ def setup(args):
     GLOBALS.update({"INV_STATES" : args.__dict__.get("!s")})
     GLOBALS.update({"PROTOS" : args.l})
     GLOBALS.update({"INV_PROTOS" : args.__dict__.get("!l")})
+    GLOBALS.update({"REPLACE_EPHEMERAL" : args.r})
     GLOBALS.update({"NO_EPHEMERAL" : args.e})
 
     MATCHER.update({
@@ -494,6 +496,15 @@ def parse_exclude_file(fin):
         EXCLUDED.append(line.strip())
 
 
+def is_ephemeral(port):
+    ''' How to determine if a port is ephemeral '''
+
+    if port == "*":
+        return True
+
+    return int(port) >= GLOBALS.get("EPHEMERAL")
+
+
 def map_servers():
     ''' Map how servers communicate '''
 
@@ -503,6 +514,8 @@ def map_servers():
     for (hostname, server) in SERVER.items():
         for (pp, details) in server.get("NETSTAT").items():
             for detail in details:
+                if GLOBALS.get("NO_EPHEMERAL") and is_ephemeral(detail.get("LOCAL_PORT")) and is_ephemeral(detail.get("REMOTE_PORT")):
+                    continue
                 pid = detail.setdefault("PID", -1)
                 proc = server.get("PS").setdefault(pid, {"PID" : pid, "PROCESS" : "Unknown", "ARGS" : ""})
                 # Figure out the process details on the remote host
@@ -512,8 +525,11 @@ def map_servers():
                 for remote_host in remote_hosts:
                     remote_pids = []
                     for rc in SERVER.get(remote_host, {}).get("NETSTAT", {}).get(f"{detail.get("REMOTE_PORT")}_{detail.get("PROTO")}", []):
-                        if hostname in get_dns(rc.get("REMOTE_HOST"), rc.get("LOCAL_HOST"), rc.get("LOCAL_PORT"), rc.get("REMOTE_PORT"), rc.get("STATE"), rc.get("PROTO")):
-                            remote_pids.append(rc.get("PID"))
+                        if hostname not in get_dns(rc.get("REMOTE_HOST"), rc.get("LOCAL_HOST"), rc.get("LOCAL_PORT"), rc.get("REMOTE_PORT"), rc.get("STATE"), rc.get("PROTO")):
+                            continue
+                        if not (detail.get("LOCAL_PORT") == rc.get("REMOTE_PORT") and detail.get("REMOTE_PORT") == rc.get("LOCAL_PORT")):
+                            continue
+                        remote_pids.append(rc.get("PID"))
                     remote_process = []
                     remote_args = []
                     for remote_pid in remote_pids:
@@ -534,6 +550,8 @@ def map_servers():
                     "STATE" : detail.get("STATE"),
                     "REMOTE_PROCESS" : remote_process_many,
                     "REMOTE_ARGS" : remote_args_many,
+                    "LOCAL_PROCESS" : proc.get("PROCESS"),
+                    "LOCAL_ARGS" : proc.get("ARGS"),
                 })
 
     if GLOBALS.get("PORTS_ONLY") or GLOBALS.get("INV_PORTS_ONLY"):
@@ -629,7 +647,7 @@ def convert_to_puml():
         define_content.append(make_node(hostname, server, label_to_port, add_label=True))
         define_content.append(end_node(hostname, server))
 
-    return define_content + label_to_port + get_connections_puml()
+    return define_content + label_to_port + list(get_connections_puml())
 
 
 def get_connections_puml():
@@ -716,7 +734,7 @@ def make_node(hostname, server, _conns, add_label=False):
                 name = (port := conn.get("LOCAL_PORT"))
                 if conn.get("PROTO").endswith("6"):
                     name = f"<u>{name}</u>"
-                if int(port) >= GLOBALS.get("EPHEMERAL"):
+                if is_ephemeral(port):
                     name = f"<i>{name}</i>"
                 else:
                     name = f"<b>{name}</b>"
@@ -828,10 +846,77 @@ def connection_type(conn, priority=2, hidden=False):
     return f" {arrow_start}{line_start}{style}{line_end}{arrow_end} "
 
 
+def safe_int(val):
+    ''' Make * safe for ints '''
+
+    if val == "*":
+        return 0
+
+    return int(val)
+
+
+def orient_connection(conn):
+    ''' Orient the connection such that the ephemeral port is remote '''
+
+    lp = conn.get("LOCAL_PORT")
+    rp = conn.get("REMOTE_PORT")
+
+    remote = "REMOTE"
+    local = "LOCAL"
+    if safe_int(lp) > safe_int(rp) and safe_int(rp) > 0:
+        remote = "LOCAL"
+        local = "REMOTE"
+
+    new_conn = {}
+    for (key, val) in conn.items():
+        if "REMOTE" in key:
+            new_conn.update({key.replace("REMOTE", remote) : val})
+        elif "LOCAL" in key:
+            if ("PROCESS" in key or "ARGS" in key) and not isinstance(val, list):
+                val = [[val]*len(conn.get("LOCAL_HOST"))]
+            new_conn.update({key.replace("LOCAL", local) : val})
+        else:
+            new_conn.update({key : val})
+    conn = new_conn
+
+    lp = conn.get("LOCAL_PORT")
+    rp = conn.get("REMOTE_PORT")
+
+    if GLOBALS.get("REPLACE_EPHEMERAL"):
+        if is_ephemeral(lp):
+            lp = "ephemeral"
+        if is_ephemeral(rp):
+            rp = "ephemeral"
+
+    new_conns = set()
+    sout = io.StringIO()
+    csv_writer = csv.writer(sout, quoting=csv.QUOTE_MINIMAL)
+    for lh in conn.get("LOCAL_HOST"):
+        for rh in conn.get("REMOTE_HOST"):
+            for (rprocs, rargs) in zip(conn.get("REMOTE_PROCESS"), conn.get("REMOTE_ARGS")):
+                for (procs, args) in zip(conn.get("LOCAL_PROCESS"), conn.get("LOCAL_ARGS")):
+                    if len(procs) == 0:
+                            procs = [""]
+                            args = [""]
+                    for (proc, arg) in zip(procs, args):
+                        if len(rprocs) == 0:
+                            rprocs = [""]
+                            rargs = [""]
+                        for (rproc, rarg) in zip(rprocs, rargs):
+                            row = [conn.get("PROTO"), conn.get("STATE"), lh, proc, arg, lp, rh, rproc, rarg, rp,]
+                            csv_writer.writerow(row)
+
+    for line in sout.getvalue().splitlines():
+        new_conns.add(line + "\n")
+
+    return new_conns
+
+
 def make_connection(hostname, proc, args, conn):
     ''' How to make a connection '''
 
-    connections = CONNECTIONS.setdefault("PUML", [])
+    connections = CONNECTIONS.setdefault("PUML", set())
+    details = CONNECTIONS.setdefault("DETAILS", set())
 
     local_port = conn.get("LOCAL_PORT")
 
@@ -840,7 +925,7 @@ def make_connection(hostname, proc, args, conn):
             f"{label_name(hostname, local_port, conn.get("PROTO"))}")
 
     if puml not in connections:
-        connections.append(puml)
+        connections.add(puml)
 
     for remote_host in conn.get("REMOTE_HOST"):
         if (remote_port := conn.get("REMOTE_PORT")) not in ("*", "0", ""):
@@ -852,8 +937,10 @@ def make_connection(hostname, proc, args, conn):
                     f"{connection_type(conn, priority=-1)}"
                     f"{port_name(hostname, local_port, conn.get("PROTO"))}")
 
-            if puml not in connections and rpuml not in connections:
-                connections.append(puml)
+            if rpuml not in connections:
+                connections.add(puml)
+
+        details.update(orient_connection(conn))
 
 
 def get_puml_prefix():
@@ -912,45 +999,19 @@ def dump_csv():
         split_fname = split_fname[:-1]
     csv_file = f"{".".join(split_fname)}.csv"
 
-    rows = []
     sout = io.StringIO()
-    csv.writer(sout, quoting=csv.QUOTE_MINIMAL).writerow(header)
-    rows.append(sout.getvalue())
-    for (hostname, server) in SERVER_MAP.items():
-        for (proc, args) in server.items():
-            no_connections = True
-            for (arg, connections) in args.items():
-                for conn in connections:
-                    for (remote_host, (remote_process, remote_args)) in zip(conn.get("REMOTE_HOST"), zip(conn.get("REMOTE_PROCESS"), conn.get("REMOTE_ARGS"))):
-                        if len(remote_process) < 1:
-                            remote_process = [""]
-                        if len(remote_args) < 1:
-                            remote_args = [""]
-                        for (p, a) in zip(remote_process, remote_args):
-                            no_connections = False
-                            rp = conn.get("REMOTE_PORT")
-                            lp = conn.get("LOCAL_PORT")
-                            if GLOBALS.get("NO_EPHEMERAL"):
-                                if rp not in ("*",) and int(rp) >= GLOBALS.get("EPHEMERAL"):
-                                    rp = "ephemeral"
-                                if lp not in ("*",) and int(lp) >= GLOBALS.get("EPHEMERAL"):
-                                    lp = "ephemeral"
-                            row = [conn.get("PROTO"), conn.get("STATE"), hostname, proc, arg, lp, remote_host, p, a, rp]
-                            sout = io.StringIO()
-                            csv.writer(sout, quoting=csv.QUOTE_MINIMAL).writerow(row)
-                            if (line := sout.getvalue()) not in rows:
-                                rows.append(line)
-
-            if no_connections:
-                row = ["", "", hostname, proc, arg, "", "", "", "", ""]
-                sout = io.StringIO()
-                csv.writer(sout, quoting=csv.QUOTE_MINIMAL).writerow(row)
-                if (line := sout.getvalue()) not in rows:
-                    rows.append(line)
+    csv_writer = csv.writer(sout, quoting=csv.QUOTE_MINIMAL)
+    csv_writer.writerow(header)
 
     with open(csv_file, "w", encoding="utf-8", newline='') as fout:
-        for line in rows:
-            fout.write(line)
+        fout.write(sout.getvalue())
+        fout.writelines(sorted(list(CONNECTIONS.setdefault("DETAILS", set()))))
+        csv_writer = csv.writer(fout, quoting=csv.QUOTE_MINIMAL)
+        for (hostname, server) in SERVER_MAP.items():
+            for (proc, args) in server.items():
+                for (arg, connections) in args.items():
+                    if len(connections) == 0:
+                        csv_writer.writerow(["", "", hostname, proc, arg, "", "", "", "", ""])
 
 
 def build_puml():
@@ -977,7 +1038,8 @@ def build_arg_parse():
     parser.add_argument("-i", help=f"Input directory(s). Default is '{" '".join(GLOBALS.get("IN_DIR"))}'", default=GLOBALS.get("IN_DIR"), nargs="+")
     parser.add_argument("-o", help=f"Output file. Default is '{GLOBALS.get("OUT_FILE")}'", default=GLOBALS.get("OUT_FILE"))
     parser.add_argument("-j", help=f"Path to 'plantuml.jar'. Default is '{GLOBALS.get("PLANT_UML")}'", default=GLOBALS.get("PLANT_UML"))
-    parser.add_argument("-e", help=f"Don't group ephemeral ports in csv. Default is '{GLOBALS.get("NO_EPHEMERAL")}'", action=f"store_{not GLOBALS.get("NO_EPHEMERAL")}".lower(), default=GLOBALS.get("NO_EPHEMERAL"))
+    parser.add_argument("-e", help=f"Allow ephemeral ports to connect to other ephemeral ports. Default is '{not GLOBALS.get("NO_EPHEMERAL")}'", action=f"store_{not GLOBALS.get("NO_EPHEMERAL")}".lower(), default=GLOBALS.get("NO_EPHEMERAL"))
+    parser.add_argument("-r", help=f"Do NOT replace ephemeral ports in csv with 'ephemeral'. Default is '{not GLOBALS.get("REPLACE_EPHEMERAL")}'", action=f"store_{not GLOBALS.get("REPLACE_EPHEMERAL")}".lower(), default=GLOBALS.get("REPLACE_EPHEMERAL"))
     exclude_parser.add_argument("-x", help=f"Processes to exclude. Default is '{GLOBALS.get("EXCLUDE_FILE")}'", default=GLOBALS.get("EXCLUDE_FILE"))
     exclude_parser.add_argument("-!x", help=f"Processes to NOT exclude")
     port_parser.add_argument("-p", help=f"Only include processes with ports", action="store_true", default=False)

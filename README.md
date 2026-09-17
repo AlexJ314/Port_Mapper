@@ -18,7 +18,9 @@ Run `port_mapper.py -o <path/to/output_file>` to choose the output file
 
 Run `port_mapper.py -j <path/to/plantuml.jar>` to specify where `plantuml.jar` is
 
-Run `port_mapper.py -e` to NOT mark ephemeral ports in the csv
+Run `port_mapper.py -e` to allow ephemeral ports to connect to other ephemeral ports
+
+Run `port_mapper.py -r` to NOT replace ephemeral ports in the csv
  - This will probably make your csv massive
 
 Run `port_mapper.py -x <exlude_file>` to choose the exclude file, that is, which processes are ignored
