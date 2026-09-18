@@ -45,6 +45,7 @@ SERVER = {}
 SERVER_MAP = {}
 EXCLUDED = {}
 CONNECTIONS = {}
+RENAMED = {}
 
 
 def main(args):
@@ -610,8 +611,10 @@ def map_servers():
             s_proc = s_host.setdefault(proc, {})
             s_args = s_proc.setdefault(args, [])
             for c in detail.setdefault("CONNECTIONS", []):
-                if GLOBALS.get("PRUNE_EPHEMERAL") and (not c.get("STATE") == "bound") and is_ephemeral(c.get("LOCAL_PORT")) and c.get("REMOTE_HOST") == [""]:
-                    c.update({"LOCAL_PORT" : f"ephemeral_{puml_name_safe(proc)}_{puml_name_safe(args)}"})
+                if GLOBALS.get("PRUNE_EPHEMERAL") and (not c.get("STATE") == "bound") and is_ephemeral(c.get("LOCAL_PORT")):
+                    name = f"ephemeral_{hostname}_{puml_name_safe(proc)}_{puml_name_safe(c.get("PROTO"))}_{puml_name_safe(args)}"
+                    org = port_name(hostname, c.get("LOCAL_PORT"), c.get("PROTO"))
+                    RENAMED.update({org : name})
                 if c not in s_args:
                     s_args.append(c)
 
@@ -749,13 +752,15 @@ def arg_name(hostname, name, args):
 def port_name(hostname, port, proto):
     ''' Return puml port name '''
 
-    return f"p_{puml_name_safe(hostname)}_{puml_name_safe(port)}_{puml_name_safe(proto)}"
+    name = f"p_{puml_name_safe(hostname)}_{puml_name_safe(port)}_{puml_name_safe(proto)}"
+
+    return RENAMED.get(name, name)
 
 
 def label_name(hostname, port, proto):
     ''' Return puml label name '''
 
-    return f"l_{puml_name_safe(hostname)}_{puml_name_safe(port)}_{puml_name_safe(proto)}"
+    return f"l_{port_name(hostname, port, proto)}"
 
 
 def make_node(hostname, server, _conns, add_label=False):
@@ -774,14 +779,14 @@ def make_node(hostname, server, _conns, add_label=False):
         for (arg, connections) in args.items():
             for conn in connections:
                 name = (port := conn.get("LOCAL_PORT"))
-                if name.startswith("ephemeral"):
-                    name = "ephemeral"
-                if conn.get("PROTO").endswith("6"):
-                    name = f"<u>{name}</u>"
                 if is_ephemeral(port):
+                    if GLOBALS.get("PRUNE_EPHEMERAL"):
+                        name = "ephemeral"
                     name = f"<i>{name}</i>"
                 else:
                     name = f"<b>{name}</b>"
+                if conn.get("PROTO").endswith("6"):
+                    name = f"<u>{name}</u>"
 
                 label_puml = f"  label \"{name}\" as {label_name(hostname, port, conn.get("PROTO"))}"
                 port_puml = f"  {conn.get("PORT_TYPE")} \" \" as {port_name(hostname, port, conn.get("PROTO"))}"
