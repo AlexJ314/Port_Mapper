@@ -23,6 +23,8 @@ Run `port_mapper.py -e` to allow ephemeral ports to connect to other ephemeral p
 Run `port_mapper.py -r` to NOT replace ephemeral ports in the csv
  - This will probably make your csv massive
 
+Run `port_mapper.py -k` to keep unique ephemeral ports in the diagram instead of merging them by process
+
 Run `port_mapper.py -x <exlude_file>` to choose the exclude file, that is, which processes are ignored
  - `-!x` inverts this argument
 

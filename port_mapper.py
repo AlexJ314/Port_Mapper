@@ -37,12 +37,13 @@ GLOBALS = {
     "INV_PROTOS" : None,
     "REPLACE_EPHEMERAL" : True,
     "NO_EPHEMERAL" : True,
+    "PRUNE_EPHEMERAL" : True,
 }
 MATCHER = {}
 DNS = {}
 SERVER = {}
 SERVER_MAP = {}
-EXCLUDED = []
+EXCLUDED = {}
 CONNECTIONS = {}
 
 
@@ -78,6 +79,7 @@ def setup(args):
     GLOBALS.update({"INV_PROTOS" : args.__dict__.get("!l")})
     GLOBALS.update({"REPLACE_EPHEMERAL" : args.r})
     GLOBALS.update({"NO_EPHEMERAL" : args.e})
+    GLOBALS.update({"PRUNE_EPHEMERAL" : args.k})
 
     MATCHER.update({
         "HOST" : re.compile(r"([a-z0-9\-]+)", re.IGNORECASE),
@@ -240,9 +242,11 @@ def parse_linux_ps(host, line):
         # Skip; it's part of the header
         return matched
 
-    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and args[0] in EXCLUDED:
+    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and args[0] in EXCLUDED.setdefault("PROCESSES", []):
+        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
-    if inv_e is not None and args[0] not in EXCLUDED:
+    if inv_e is not None and args[0] not in EXCLUDED.setdefault("PROCESSES", []):
+        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
 
     if (users := GLOBALS.get("USERS")) is not None and uid not in users:
@@ -312,9 +316,11 @@ def parse_linux_netstat(host, line):
     elif state not in closed_states():
         return matched
 
-    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and process in EXCLUDED:
+    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and process in EXCLUDED.setdefault("PROCESSES", []):
+        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
-    if inv_e is not None and process not in EXCLUDED:
+    if inv_e is not None and process not in EXCLUDED.setdefault("PROCESSES", []):
+        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
 
     if (states := GLOBALS.get("STATES")) is not None and state not in states:
@@ -363,9 +369,11 @@ def parse_windows_gp(host, line):
         # Skip; it's part of the header
         return matched
 
-    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and process in EXCLUDED:
+    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and process in EXCLUDED.setdefault("PROCESSES", []):
+        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
-    if inv_e is not None and process not in EXCLUDED:
+    if inv_e is not None and process not in EXCLUDED.setdefault("PROCESSES", []):
+        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
 
     SERVER.get(host).get("PS").update({
@@ -391,9 +399,11 @@ def parse_windows_ps(host, line):
     stime = matched.group(4).lower()
     args = shlex.split(matched.group(5).lower(), posix=False)
 
-    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and args[0] in EXCLUDED:
+    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and args[0] in EXCLUDED.setdefault("PROCESSES", []):
+        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
-    if inv_e is not None and args[0] not in EXCLUDED:
+    if inv_e is not None and args[0] not in EXCLUDED.setdefault("PROCESSES", []):
+        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
 
     if (users := GLOBALS.get("USERS")) is not None and uid not in users:
@@ -509,7 +519,7 @@ def parse_exclude_file(fin):
     ''' Parses the given exclude file '''
 
     for line in fin:
-        EXCLUDED.append(line.strip())
+        EXCLUDED.setdefault("PROCESSES", []).append(line.strip())
 
 
 def is_ephemeral(port):
@@ -518,7 +528,10 @@ def is_ephemeral(port):
     if port in ("*", "0"):
         return False
 
-    return int(port) >= GLOBALS.get("EPHEMERAL")
+    if port.startswith("ephemeral"):
+        return True
+
+    return safe_int(port) >= GLOBALS.get("EPHEMERAL")
 
 
 def map_servers():
@@ -530,11 +543,13 @@ def map_servers():
     for (hostname, server) in SERVER.items():
         for (pp, details) in server.get("NETSTAT").items():
             for detail in details:
+                pid = detail.setdefault("PID", "-1")
+                if pid in EXCLUDED.get("HOSTNAME", {}).get(hostname, []):
+                    continue
                 l_lp = detail.get("LOCAL_PORT")
                 l_rp = detail.get("REMOTE_PORT")
                 if GLOBALS.get("NO_EPHEMERAL") and is_ephemeral(l_lp) and is_ephemeral(l_rp):
                     continue
-                pid = detail.setdefault("PID", -1)
                 proc = server.get("PS").setdefault(pid, {"PID" : pid, "PROCESS" : "Unknown", "ARGS" : ""})
                 # Figure out the process details on the remote host
                 remote_hosts = get_dns(detail.get("REMOTE_HOST"), hostname, l_lp, l_rp, detail.get("STATE"), detail.get("PROTO"))
@@ -543,6 +558,9 @@ def map_servers():
                 for remote_host in remote_hosts:
                     remote_pids = []
                     for rc in SERVER.get(remote_host, {}).get("NETSTAT", {}).get(f"{l_rp}_{detail.get("PROTO")}", []):
+                        r_pid = rc.get("PID")
+                        if r_pid in EXCLUDED.get("HOSTNAME", {}).get(remote_host, []):
+                            continue
                         r_lp = rc.get("LOCAL_PORT")
                         r_rp = rc.get("REMOTE_PORT")
                         if hostname not in get_dns(rc.get("REMOTE_HOST"), rc.get("LOCAL_HOST"), r_lp, r_rp, rc.get("STATE"), rc.get("PROTO")):
@@ -550,7 +568,7 @@ def map_servers():
                         if not ((l_lp == r_rp and l_rp == r_lp)):
                             if not (l_rp == "0" or r_rp == "0"):
                                 continue
-                        remote_pids.append(rc.get("PID"))
+                        remote_pids.append(r_pid)
                     remote_process = []
                     remote_args = []
                     for remote_pid in remote_pids:
@@ -592,7 +610,11 @@ def map_servers():
             args = detail.get("ARGS")
             s_proc = s_host.setdefault(proc, {})
             s_args = s_proc.setdefault(args, [])
-            s_args += detail.setdefault("CONNECTIONS", [])
+            for c in detail.setdefault("CONNECTIONS", []):
+                if GLOBALS.get("PRUNE_EPHEMERAL") and (not c.get("STATE") == "bound") and is_ephemeral(c.get("LOCAL_PORT")) and c.get("REMOTE_HOST") in ([""], c.get("LOCAL_HOST")):
+                    c.update({"LOCAL_PORT" : f"ephemeral_{puml_name_safe(proc)}_{puml_name_safe(args)}"})
+                if c not in s_args:
+                    s_args.append(c)
 
 
 def add_dns(hostname, ip):
@@ -753,6 +775,8 @@ def make_node(hostname, server, _conns, add_label=False):
         for (arg, connections) in args.items():
             for conn in connections:
                 name = (port := conn.get("LOCAL_PORT"))
+                if name.startswith("ephemeral"):
+                    name = "ephemeral"
                 if conn.get("PROTO").endswith("6"):
                     name = f"<u>{name}</u>"
                 if is_ephemeral(port):
@@ -867,6 +891,18 @@ def connection_type(conn, priority=2, hidden=False):
     return f" {arrow_start}{line_start}{style}{line_end}{arrow_end} "
 
 
+def safe_int(val):
+    ''' Make ports safe for ints '''
+
+    if val == "*":
+        return 0
+
+    if val.startswith("ephemeral"):
+        return 2**16
+
+    return int(val)
+
+
 def orient_connection(conn):
     ''' Orient the connection such that the ephemeral port is remote '''
 
@@ -875,7 +911,7 @@ def orient_connection(conn):
 
     remote = "REMOTE"
     local = "LOCAL"
-    if int(lp) > int(rp) and int(rp) > 0:
+    if safe_int(lp) > safe_int(rp) and safe_int(rp) > 0:
         remote = "LOCAL"
         local = "REMOTE"
 
@@ -1052,6 +1088,7 @@ def build_arg_parse():
     parser.add_argument("-j", help=f"Path to 'plantuml.jar'. Default is '{GLOBALS.get("PLANT_UML")}'", default=GLOBALS.get("PLANT_UML"))
     parser.add_argument("-e", help=f"Allow ephemeral ports to connect to other ephemeral ports. Default is '{not GLOBALS.get("NO_EPHEMERAL")}'", action=f"store_{not GLOBALS.get("NO_EPHEMERAL")}".lower(), default=GLOBALS.get("NO_EPHEMERAL"))
     parser.add_argument("-r", help=f"Do NOT replace ephemeral ports in csv with 'ephemeral'. Default is '{not GLOBALS.get("REPLACE_EPHEMERAL")}'", action=f"store_{not GLOBALS.get("REPLACE_EPHEMERAL")}".lower(), default=GLOBALS.get("REPLACE_EPHEMERAL"))
+    parser.add_argument("-k", help=f"Keep ephemeral ports in diagram instead of pruning. Default is '{not GLOBALS.get("PRUNE_EPHEMERAL")}'", action=f"store_{not GLOBALS.get("PRUNE_EPHEMERAL")}".lower(), default=GLOBALS.get("PRUNE_EPHEMERAL"))
     exclude_parser.add_argument("-x", help=f"Processes to exclude. Default is '{GLOBALS.get("EXCLUDE_FILE")}'", default=GLOBALS.get("EXCLUDE_FILE"))
     exclude_parser.add_argument("-!x", help=f"Processes to NOT exclude")
     port_parser.add_argument("-p", help=f"Only include processes with ports", action="store_true", default=False)
