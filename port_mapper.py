@@ -298,6 +298,14 @@ def parse_linux_netstat(host, line):
     elif state in ("syn_send", "syn_sent"):
         port_type = "portout"
 
+    if local_port in ("*", ""):
+        local_port = "0"
+    if remote_port in ("*", ""):
+        remote_port = "0"
+
+    if remote_host == "*":
+        remote_host = ""
+
     if not GLOBALS.get("INV_INCLUDE_CLOSED"):
         if not GLOBALS.get("INCLUDE_CLOSED") and state in closed_states():
             return matched
@@ -434,6 +442,14 @@ def parse_windows_netstat(host, line):
     elif state in ("syn_send", "syn_sent"):
         port_type = "portout"
 
+    if local_port in ("*", ""):
+        local_port = "0"
+    if remote_port in ("*", ""):
+        remote_port = "0"
+
+    if remote_host == "*":
+        remote_host = ""
+
     if not GLOBALS.get("INV_INCLUDE_CLOSED"):
         if not GLOBALS.get("INCLUDE_CLOSED") and state in closed_states():
             return matched
@@ -499,8 +515,8 @@ def parse_exclude_file(fin):
 def is_ephemeral(port):
     ''' How to determine if a port is ephemeral '''
 
-    if port == "*":
-        return True
+    if port in ("*", "0"):
+        return False
 
     return int(port) >= GLOBALS.get("EPHEMERAL")
 
@@ -514,21 +530,26 @@ def map_servers():
     for (hostname, server) in SERVER.items():
         for (pp, details) in server.get("NETSTAT").items():
             for detail in details:
-                if GLOBALS.get("NO_EPHEMERAL") and is_ephemeral(detail.get("LOCAL_PORT")) and is_ephemeral(detail.get("REMOTE_PORT")):
+                l_lp = detail.get("LOCAL_PORT")
+                l_rp = detail.get("REMOTE_PORT")
+                if GLOBALS.get("NO_EPHEMERAL") and is_ephemeral(l_lp) and is_ephemeral(l_rp):
                     continue
                 pid = detail.setdefault("PID", -1)
                 proc = server.get("PS").setdefault(pid, {"PID" : pid, "PROCESS" : "Unknown", "ARGS" : ""})
                 # Figure out the process details on the remote host
-                remote_hosts = get_dns(detail.get("REMOTE_HOST"), hostname, detail.get("LOCAL_PORT"), detail.get("REMOTE_PORT"), detail.get("STATE"), detail.get("PROTO"))
+                remote_hosts = get_dns(detail.get("REMOTE_HOST"), hostname, l_lp, l_rp, detail.get("STATE"), detail.get("PROTO"))
                 remote_process_many = []
                 remote_args_many = []
                 for remote_host in remote_hosts:
                     remote_pids = []
-                    for rc in SERVER.get(remote_host, {}).get("NETSTAT", {}).get(f"{detail.get("REMOTE_PORT")}_{detail.get("PROTO")}", []):
-                        if hostname not in get_dns(rc.get("REMOTE_HOST"), rc.get("LOCAL_HOST"), rc.get("LOCAL_PORT"), rc.get("REMOTE_PORT"), rc.get("STATE"), rc.get("PROTO")):
+                    for rc in SERVER.get(remote_host, {}).get("NETSTAT", {}).get(f"{l_rp}_{detail.get("PROTO")}", []):
+                        r_lp = rc.get("LOCAL_PORT")
+                        r_rp = rc.get("REMOTE_PORT")
+                        if hostname not in get_dns(rc.get("REMOTE_HOST"), rc.get("LOCAL_HOST"), r_lp, r_rp, rc.get("STATE"), rc.get("PROTO")):
                             continue
-                        if not (detail.get("LOCAL_PORT") == rc.get("REMOTE_PORT") and detail.get("REMOTE_PORT") == rc.get("LOCAL_PORT")):
-                            continue
+                        if not ((l_lp == r_rp and l_rp == r_lp)):
+                            if not (l_rp == "0" or r_rp == "0"):
+                                continue
                         remote_pids.append(rc.get("PID"))
                     remote_process = []
                     remote_args = []
@@ -594,7 +615,7 @@ def get_dns(ip, local_host, local_port, remote_port, state, proto):
     if MATCHER.get("LOCAL_IP").fullmatch(ip):
         return [local_host]
 
-    if DNS.get(ip) is None and ip not in ('*',):
+    if DNS.get(ip) is None and not ip == "":
         unknown = DNS.setdefault("UNKNOWN", {})
         server = unknown.setdefault(ip, {})
         proc = server.setdefault(f"{remote_port}_{proto}", {})
@@ -846,15 +867,6 @@ def connection_type(conn, priority=2, hidden=False):
     return f" {arrow_start}{line_start}{style}{line_end}{arrow_end} "
 
 
-def safe_int(val):
-    ''' Make * safe for ints '''
-
-    if val == "*":
-        return 0
-
-    return int(val)
-
-
 def orient_connection(conn):
     ''' Orient the connection such that the ephemeral port is remote '''
 
@@ -863,7 +875,7 @@ def orient_connection(conn):
 
     remote = "REMOTE"
     local = "LOCAL"
-    if safe_int(lp) > safe_int(rp) and safe_int(rp) > 0:
+    if int(lp) > int(rp) and int(rp) > 0:
         remote = "LOCAL"
         local = "REMOTE"
 
@@ -928,7 +940,7 @@ def make_connection(hostname, proc, args, conn):
         connections.add(puml)
 
     for remote_host in conn.get("REMOTE_HOST"):
-        if (remote_port := conn.get("REMOTE_PORT")) not in ("*", "0", ""):
+        if not (remote_port := conn.get("REMOTE_PORT")) == "0":
             puml = (f"{port_name(hostname, local_port, conn.get("PROTO"))}"
                     f"{connection_type(conn, priority=-1)}"
                     f"{port_name(remote_host, remote_port, conn.get("PROTO"))}")
