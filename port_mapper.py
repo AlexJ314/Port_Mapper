@@ -118,11 +118,10 @@ def setup(args):
                                           , re.IGNORECASE),
             },
             "WINDOWS_GP" : {
-                "HEADER" : re.compile(r"ProcessId\s+Name\s+CommandLine", re.IGNORECASE),
+                "HEADER" : re.compile(r"ProcessId\s+(Name\s+)CommandLine", re.IGNORECASE),
                 "PARSER" : parse_windows_gp,
                 "FULL_MATCH" : re.compile(r"([\-\d]+)\s+"                  # PID
-                                           r"((?:.(?!\s{2,}))*[^\s])\s*"    # Process
-                                           r"(.*)"                          # CMD
+                                           r"(.*)\s*"                      # Process and CMD
                                           , re.IGNORECASE),
             },
             "WINDOWS_PS" : {
@@ -199,8 +198,8 @@ def parse_file(fin, host):
         if len(line) < 3:
             continue
         if ftype is None:
-            ftype = guess_type(line)
-        elif MATCHER.get("TYPE").get(ftype).get("PARSER")(host, line) is None:
+            (ftype, match_group) = guess_type(line)
+        elif MATCHER.get("TYPE").get(ftype).get("PARSER")(host, line, match_group) is None:
             print(f"Stopped reading at `{line}`")
             break
     return ftype
@@ -210,10 +209,10 @@ def guess_type(line):
     ''' Figure out what command was used to generate this input file '''
 
     for (m, r) in MATCHER.get("TYPE").items():
-        if r.get("HEADER").match(line):
+        if g := r.get("HEADER").match(line):
             print(f"{m}")
-            return m
-    return None
+            return (m, g)
+    return (None, None)
 
 
 def closed_states():
@@ -222,7 +221,7 @@ def closed_states():
     return ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing",)
 
 
-def parse_linux_ps(host, line):
+def parse_linux_ps(host, line, header_match):
     ''' Match a Linux ps output '''
 
     matched = MATCHER.get("TYPE").get("LINUX_PS").get("FULL_MATCH").match(line)
@@ -270,7 +269,7 @@ def parse_linux_ps(host, line):
     return matched
 
 
-def parse_linux_netstat(host, line):
+def parse_linux_netstat(host, line, header_match):
     ''' Match a Linux netstat output '''
 
     matched = MATCHER.get("TYPE").get("LINUX_NETSTAT").get("FULL_MATCH").match(line)
@@ -354,7 +353,7 @@ def parse_linux_netstat(host, line):
     return matched
 
 
-def parse_windows_gp(host, line):
+def parse_windows_gp(host, line, header_match):
     ''' Match a Windows Get-CimInstance OR Get-WmiObject output '''
 
     matched = MATCHER.get("TYPE").get("WINDOWS_GP").get("FULL_MATCH").match(line)
@@ -362,8 +361,9 @@ def parse_windows_gp(host, line):
         return None
 
     pid = matched.group(1).lower()
-    process = matched.group(2).lower()
-    args = matched.group(3).lower()
+    args = matched.group(2).lower()
+    process = args[0:len(header_match.group(1))].strip()
+    args = args[len(header_match.group(1)):]
 
     if "-" in pid:
         # Skip; it's part of the header
@@ -386,7 +386,7 @@ def parse_windows_gp(host, line):
     return matched
 
 
-def parse_windows_ps(host, line):
+def parse_windows_ps(host, line, header_match):
     ''' Match a Windows ps output '''
 
     matched = MATCHER.get("TYPE").get("WINDOWS_PS").get("FULL_MATCH").match(line)
@@ -424,7 +424,7 @@ def parse_windows_ps(host, line):
     return matched
 
 
-def parse_windows_netstat(host, line):
+def parse_windows_netstat(host, line, header_match):
     ''' Match a Windows netstat output '''
 
     matched = MATCHER.get("TYPE").get("WINDOWS_NETSTAT").get("FULL_MATCH").match(line)
