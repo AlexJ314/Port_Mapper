@@ -696,7 +696,7 @@ def convert_to_puml():
 def get_connections_puml():
     ''' Returns a puml list of connections '''
 
-    return CONNECTIONS.get("PUML", [])
+    return CONNECTIONS.setdefault("PUML", set())
 
 
 def puml_name_safe(string):
@@ -995,6 +995,7 @@ def get_puml_prefix():
     ''' Boilerplate to start puml '''
 
     ret = ("@startuml\n"
+    "scale 0.5\n"
     "!theme sunlust\n"
     "skinparam linetype ortho\n"
     "skinparam roundCorner 7\n"
