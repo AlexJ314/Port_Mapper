@@ -85,9 +85,8 @@ def setup(args):
         "HOST" : re.compile(r"([a-z0-9\-]+)", re.IGNORECASE),
         "LOCAL_IP" : re.compile(r"(\[*(?:(?:0+\.*\:*)+|"
                                r"(?:f+\.*\:*)+|"
-                               r"(?:\:+0?1?)+|"
-                               r"(?:\.+0?1?)+|"
-                               r"(?:127\.0\.0\.1)"
+                               r"(?:[\:\.0]+)1?|"
+                               r"(?:127\.0+\.0+\.1)"
                                r")\]*)", re.IGNORECASE),
         "IPV6" : re.compile(r"([^\.*]+)", re.IGNORECASE),
         "TYPE" : {
@@ -563,7 +562,7 @@ def map_servers():
                             continue
                         r_lp = rc.get("LOCAL_PORT")
                         r_rp = rc.get("REMOTE_PORT")
-                        if hostname not in get_dns(rc.get("REMOTE_HOST"), rc.get("LOCAL_HOST"), r_lp, r_rp, rc.get("STATE"), rc.get("PROTO")):
+                        if hostname not in get_dns(rc.get("REMOTE_HOST"), remote_host, r_lp, r_rp, rc.get("STATE"), rc.get("PROTO")):
                             continue
                         if not ((l_lp == r_rp and l_rp == r_lp)):
                             if not (l_rp == "0" or r_rp == "0"):
@@ -611,7 +610,7 @@ def map_servers():
             s_proc = s_host.setdefault(proc, {})
             s_args = s_proc.setdefault(args, [])
             for c in detail.setdefault("CONNECTIONS", []):
-                if GLOBALS.get("PRUNE_EPHEMERAL") and (not c.get("STATE") == "bound") and is_ephemeral(c.get("LOCAL_PORT")) and c.get("REMOTE_HOST") in ([""], c.get("LOCAL_HOST")):
+                if GLOBALS.get("PRUNE_EPHEMERAL") and (not c.get("STATE") == "bound") and is_ephemeral(c.get("LOCAL_PORT")) and c.get("REMOTE_HOST") == [""]:
                     c.update({"LOCAL_PORT" : f"ephemeral_{puml_name_safe(proc)}_{puml_name_safe(args)}"})
                 if c not in s_args:
                     s_args.append(c)
