@@ -1,17 +1,23 @@
 """ port_mapper.py - Map the ports and processes between servers """
 # Linux:
 #   sudo netstat -pan > ${HOSTNAME}_netstat.txt
-#   sudo ps -ef > ${HOSTNAME}_ps.txt
-#
-# Windows (powershell):
-#   netstat -anoq > ${Env:COMPUTERNAME}_netstat.txt
-#   Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt
 #     OR
-#   Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt
+#   sudo netstat -panc > ${HOSTNAME}_netstat.txt
+#   sudo ps -ef > ${HOSTNAME}_ps.txt
 #
 # Windows (cmd):
 #   netstat -anoq > %COMPUTERNAME%_netstat.txt
+#     OR
+#   netstat -anoq 1 > %COMPUTERNAME%_netstat.txt
 #   ps -ef > %COMPUTERNAME%_ps.txt
+#
+# Windows (powershell):
+#   netstat -anoq > ${Env:COMPUTERNAME}_netstat.txt
+#     OR
+#   netstat -anoq 1 > ${Env:COMPUTERNAME}_netstat.txt
+#   Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt
+#     OR
+#   Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt
 
 
 import io, os, re, argparse, shlex, subprocess, csv
@@ -37,7 +43,10 @@ GLOBALS = {
     "INV_PROTOS" : None,
     "REPLACE_EPHEMERAL" : True,
     "NO_EPHEMERAL" : True,
+    "NO_GROUP" : False,
     "PRUNE_EPHEMERAL" : True,
+    "NO_INTERACTIVE" : False,
+    "SVG_FUNCTION" : "./svg_function.svg",
 }
 MATCHER = {}
 DNS = {}
@@ -81,6 +90,8 @@ def setup(args):
     GLOBALS.update({"REPLACE_EPHEMERAL" : args.r})
     GLOBALS.update({"NO_EPHEMERAL" : args.e})
     GLOBALS.update({"PRUNE_EPHEMERAL" : args.k})
+    GLOBALS.update({"NO_INTERACTIVE" : args.v})
+    GLOBALS.update({"NO_GROUP" : args.g})
 
     MATCHER.update({
         "HOST" : re.compile(r"([a-z0-9\-]+)", re.IGNORECASE),
@@ -193,6 +204,7 @@ def parse_file(fin, host):
     ''' Try to parse each line of an input file '''
 
     ftype = None
+    last_ftype = None
     for line in fin:
         line = line.strip()
         if len(line) < 3:
@@ -200,9 +212,9 @@ def parse_file(fin, host):
         if ftype is None:
             (ftype, match_group) = guess_type(line)
         elif MATCHER.get("TYPE").get(ftype).get("PARSER")(host, line, match_group) is None:
-            print(f"Stopped reading at `{line}`")
-            break
-    return ftype
+            last_ftype = ftype
+            ftype = None
+    return ftype if last_ftype is None else last_ftype
 
 
 def guess_type(line):
@@ -236,15 +248,17 @@ def parse_linux_ps(host, line, header_match):
     tty = matched.group(6).lower()
     time = matched.group(7).lower()
     args = shlex.split(matched.group(8).lower(), posix=False)
+    process = args[0]
+    args = shlex.join(args[1:])
 
     if "-" in pid:
         # Skip; it's part of the header
         return matched
 
-    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and args[0] in EXCLUDED.setdefault("PROCESSES", []):
+    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and process in EXCLUDED.setdefault("PROCESSES", []):
         EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
-    if inv_e is not None and args[0] not in EXCLUDED.setdefault("PROCESSES", []):
+    if inv_e is not None and process not in EXCLUDED.setdefault("PROCESSES", []):
         EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
 
@@ -252,6 +266,9 @@ def parse_linux_ps(host, line, header_match):
         return matched
     if (users := GLOBALS.get("INV_USERS")) is not None and uid in users:
         return matched
+
+    if GLOBALS.get("NO_GROUP"):
+        process = f"{process}?{pid}"
 
     SERVER.get(host).get("PS").update({
         f"{pid}" : {
@@ -262,8 +279,8 @@ def parse_linux_ps(host, line, header_match):
             "STIME" : stime,
             "TTY" : tty,
             "TIME" : time,
-            "PROCESS" : args[0],
-            "ARGS" : shlex.join(args[1:])
+            "PROCESS" : process,
+            "ARGS" : args
         }
     })
     return matched
@@ -348,7 +365,10 @@ def parse_linux_netstat(host, line, header_match):
     }
 
     pp = SERVER.get(host).get("NETSTAT").setdefault(f"{local_port}_{proto}", [])
-    pp.append(new_val)
+    try:
+        pp.remove(new_val)
+    except ValueError:
+        pp.append(new_val)
 
     return matched
 
@@ -376,6 +396,9 @@ def parse_windows_gp(host, line, header_match):
         EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
 
+    if GLOBALS.get("NO_GROUP"):
+        process = f"{process}?{pid}"
+
     SERVER.get(host).get("PS").update({
         f"{pid}" : {
             "PID" : pid,
@@ -398,11 +421,13 @@ def parse_windows_ps(host, line, header_match):
     ppid = matched.group(3).lower()
     stime = matched.group(4).lower()
     args = shlex.split(matched.group(5).lower(), posix=False)
+    process = args[0]
+    args = shlex.join(args[1:])
 
-    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and args[0] in EXCLUDED.setdefault("PROCESSES", []):
+    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and process in EXCLUDED.setdefault("PROCESSES", []):
         EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
-    if inv_e is not None and args[0] not in EXCLUDED.setdefault("PROCESSES", []):
+    if inv_e is not None and process not in EXCLUDED.setdefault("PROCESSES", []):
         EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
 
@@ -411,14 +436,17 @@ def parse_windows_ps(host, line, header_match):
     if (users := GLOBALS.get("INV_USERS")) is not None and uid in users:
         return matched
 
+    if GLOBALS.get("NO_GROUP"):
+        process = f"{process}?{pid}"
+
     SERVER.get(host).get("PS").update({
         f"{pid}" : {
             "UID" : uid,
             "PID" : pid,
             "PPID" : ppid,
             "STIME" : stime,
-            "PROCESS" : args[0],
-            "ARGS" : shlex.join(args[1:])
+            "PROCESS" : process,
+            "ARGS" : args,
         }
     })
     return matched
@@ -491,7 +519,10 @@ def parse_windows_netstat(host, line, header_match):
     }
 
     pp = SERVER.get(host).get("NETSTAT").setdefault(f"{local_port}_{proto}", [])
-    pp.append(new_val)
+    try:
+        pp.remove(new_val)
+    except ValueError:
+        pp.append(new_val)
 
     return matched
 
@@ -550,7 +581,7 @@ def map_servers():
                 l_rp = detail.get("REMOTE_PORT")
                 if GLOBALS.get("NO_EPHEMERAL") and is_ephemeral(l_lp) and is_ephemeral(l_rp):
                     continue
-                proc = server.get("PS").setdefault(pid, {"PID" : pid, "PROCESS" : "Unknown", "ARGS" : ""})
+                proc = server.get("PS").setdefault(pid, {"PID" : pid, "PROCESS" : f"PID: {pid if pid != "" else "-1"}", "ARGS" : "Unknown"})
                 # Figure out the process details on the remote host
                 remote_hosts = get_dns(detail.get("REMOTE_HOST"), hostname, l_lp, l_rp, detail.get("STATE"), detail.get("PROTO"))
                 remote_process_many = []
@@ -823,7 +854,11 @@ def remove_empty_node(content):
 def make_process(hostname, name, args):
     ''' How to start a process '''
 
-    return f"  component \"{puml_safe(name)}\" as {process_name(hostname, name, args)} {{"
+    display_name = name
+    if GLOBALS.get("NO_GROUP"):
+        display_name = name.split("?")[0]
+
+    return f"  component \"{puml_safe(display_name)}\" as {process_name(hostname, name, args)} {{"
 
 
 def end_process(hostname, name, args):
@@ -841,6 +876,8 @@ def make_args(hostname, name, args):
     if len(args) > 1:
         ret += f"      {args}\n"
     else:
+        if GLOBALS.get("NO_GROUP"):
+            name = name.split("?")[0]
         ret += f"      {puml_safe(name)}\n"
     ret += "    ]"
 
@@ -1006,8 +1043,6 @@ def get_puml_prefix():
     "skinparam linetype ortho\n"
     "skinparam roundCorner 7\n"
     "!pragma layout elk\n"
-    "'!pragma svginteractive true\n"
-    "'skinparam pathHoverColor #yellow\n"
     "<style>\n"
     "    process {\n"
     "        LineColor \"#FFF\"\n"
@@ -1076,8 +1111,41 @@ def build_puml():
     if os.path.isfile(plantuml):
         print("Generating diagram with PlantUML")
         subprocess.run(["java", "-jar", plantuml, GLOBALS.get("OUT_FILE"), "-tsvg"])
+        split_fname = GLOBALS.get("OUT_FILE").split(".")
+        if len(split_fname) > 1:
+            split_fname = split_fname[:-1]
+        svg_file = f"{".".join(split_fname)}.svg"
+        make_interactive(svg_file)
     else:
         print(f"Failed to find '{plantuml}' Not generating diagram")
+
+
+def make_interactive(svg_file):
+    ''' Adds functions to make the svg interactive '''
+
+    if GLOBALS.get("NO_INTERACTIVE"):
+        return
+
+    if not os.path.isfile(GLOBALS.get("SVG_FUNCTION")):
+        print(f"Failed to find SVG function file `{GLOBALS.get("SVG_FUNCTION")}`. SVG will not be interactive")
+        return
+
+    if not os.path.isfile(svg_file):
+        print(f"Failed to find `{svg_file}` to add interactive functionality to")
+        return
+
+    print("Making SVG interactive")
+
+    with open(GLOBALS.get("SVG_FUNCTION"), "r", encoding="utf-8", newline='') as fin:
+        svg_function = fin.read()
+
+    with open(svg_file, "r", encoding="utf-8", newline='') as fin:
+        svg_string = fin.read()
+
+    svg_string = svg_string.replace("<defs/>", svg_function, 1)
+
+    with open(svg_file, "w", encoding="utf-8", newline='') as fout:
+        fout.write(svg_string)
 
 
 def build_arg_parse():
@@ -1096,6 +1164,8 @@ def build_arg_parse():
     parser.add_argument("-e", help=f"Allow ephemeral ports to connect to other ephemeral ports. Default is '{not GLOBALS.get("NO_EPHEMERAL")}'", action=f"store_{not GLOBALS.get("NO_EPHEMERAL")}".lower(), default=GLOBALS.get("NO_EPHEMERAL"))
     parser.add_argument("-r", help=f"Do NOT replace ephemeral ports in csv with 'ephemeral'. Default is '{not GLOBALS.get("REPLACE_EPHEMERAL")}'", action=f"store_{not GLOBALS.get("REPLACE_EPHEMERAL")}".lower(), default=GLOBALS.get("REPLACE_EPHEMERAL"))
     parser.add_argument("-k", help=f"Keep ephemeral ports in diagram instead of pruning. Default is '{not GLOBALS.get("PRUNE_EPHEMERAL")}'", action=f"store_{not GLOBALS.get("PRUNE_EPHEMERAL")}".lower(), default=GLOBALS.get("PRUNE_EPHEMERAL"))
+    parser.add_argument("-v", help=f"Generate a static SVG instead of interactive. Default is '{GLOBALS.get("NO_INTERACTIVE")}'", action=f"store_{not GLOBALS.get("NO_INTERACTIVE")}".lower(), default=GLOBALS.get("NO_INTERACTIVE"))
+    parser.add_argument("-g", help=f"Don't group many args under the same process. Default is '{GLOBALS.get("NO_GROUP")}'", action=f"store_{not GLOBALS.get("NO_GROUP")}".lower(), default=GLOBALS.get("NO_GROUP"))
     exclude_parser.add_argument("-x", help=f"Processes to exclude. Default is '{GLOBALS.get("EXCLUDE_FILE")}'", default=GLOBALS.get("EXCLUDE_FILE"))
     exclude_parser.add_argument("-!x", help=f"Processes to NOT exclude")
     port_parser.add_argument("-p", help=f"Only include processes with ports", action="store_true", default=False)

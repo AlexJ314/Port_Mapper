@@ -23,6 +23,11 @@ Run `port_mapper.py -e` to allow ephemeral ports to connect to other ephemeral p
 Run `port_mapper.py -r` to NOT replace ephemeral ports in the csv
  - This will probably make your csv massive
 
+Run `port_mapper.py -v` to generate a static svg instead of an interactive one
+
+Run `port_mapper.py -g` to prevent different arguments to the same process being grouped under one process
+ - Useful if the diagram becomes unreadable when a few processes run dozens of times with different arguments
+
 Run `port_mapper.py -k` to keep unique ephemeral ports in the diagram instead of merging them by process
 
 Run `port_mapper.py -x <exlude_file>` to choose the exclude file, that is, which processes are ignored
@@ -45,15 +50,24 @@ Run `port_mapper.py -l <proto1> <proto2...>` to only include the given protocol(
 
 ## Linux:
  - `sudo netstat -pan > ${HOSTNAME}_netstat.txt`
+   - **OR**
+ - `sudo netstat -panc > ${HOSTNAME}_netstat.txt`
+   - Updates every second, needs to be stopped with `CTRL + C`
  - `sudo ps -ef > ${HOSTNAME}_ps.txt`
 
 ## Windows (cmd, preferred):
  - `netstat -anoq > %COMPUTERNAME%_netstat.txt`
+    - **OR**
+ - `netstat -anoq 1 > %COMPUTERNAME%_netstat.txt`
+   - Updates every second, needs to be stopped with `CTRL + C`
  - `ps -ef > %COMPUTERNAME%_ps.txt`
    - To be clear, this `ps` is a port of Linux's `ps`, NOT an alias of powershell's `Get-Process`
 
 ## Windows (powershell):
  - `netstat -anoq > ${Env:COMPUTERNAME}_netstat.txt`
+    - **OR**
+ - `netstat -anoq 1 > %COMPUTERNAME%_netstat.txt`
+   - Updates every second, needs to be stopped with `CTRL + C`
  - `Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
    - **OR**
  - `Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
