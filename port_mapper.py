@@ -253,6 +253,121 @@ def closed_states():
     return ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing",)
 
 
+def shared_ps(value, host):
+    ''' Process parsing shared between types '''
+
+    inv_e = GLOBALS.get("INV_EXCLUDE_FILE")
+    users = GLOBALS.get("USERS")
+    inv_users = GLOBALS.get("INV_USERS")
+
+    pid = value.get("PID", "")
+    process = value.get("PROCESS", "")
+    uid = value.get("UID", "")
+
+    if "-" in pid:
+        # Skip; it's part of the header
+        return False
+
+    if inv_e is None and process in EXCLUDED.setdefault("PROCESSES", []):
+        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
+        return False
+    if inv_e is not None and process not in EXCLUDED.setdefault("PROCESSES", []):
+        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
+        return False
+
+    if users is not None and uid not in users:
+        return False
+    if inv_users is not None and uid in inv_users:
+        return False
+
+    if not GLOBALS.get("GROUP"):
+        value.update({"PROCESS" : f"{process}?{pid}"})
+
+    SERVER.get(host).get("PS").update({
+        f"{pid}" : value,
+    })
+
+    return True
+
+
+def shared_netstat(value, host):
+    ''' Netstat parsing shared between types '''
+
+    port_type = "port"
+
+    inv_e = GLOBALS.get("INV_EXCLUDE_FILE")
+    states = GLOBALS.get("STATES")
+    inv_states = GLOBALS.get("INV_STATES")
+    protos = GLOBALS.get("PROTOS")
+    inv_protos = GLOBALS.get("INV_PROTOS")
+
+    local_host = value.get("LOCAL_HOST", "")
+    local_port = value.get("LOCAL_PORT", "")
+    state = value.get("STATE", "")
+    remote_port = value.get("REMOTE_PORT", "")
+    remote_host = value.get("REMOTE_HOST", "")
+    process = value.get("PROCESS", "")
+    pid = value.get("PID", "")
+    state = value.get("STATE", "")
+    proto = value.get("PROTO", "")
+
+    add_dns(host, local_host)
+
+    if "*" in local_port:
+        # Don't bother if the port isn't set up
+        return False
+
+    if state in ("listening", "listen", "syn_received", "syn_recv") or remote_port in ("*", "0", "") or not is_ephemeral(local_port):
+        port_type += "_portin"
+    if state in ("syn_send", "syn_sent") or is_ephemeral(local_port):
+        port_type += "_portout"
+    value.update({"PORT_TYPE" : port_type})
+
+    if local_port in ("*", ""):
+        local_port = "0"
+        value.update({"LOCAL_PORT" : local_port})
+    if remote_port in ("*", ""):
+        remote_port = "0"
+        value.update({"REMOTE_PORT" : remote_port})
+
+    if remote_host == "*":
+        remote_host = ""
+        value.update({"REMOTE_HOST" : remote_host})
+
+    if not GLOBALS.get("INV_INCLUDE_CLOSED"):
+        if not GLOBALS.get("INCLUDE_CLOSED") and state in closed_states():
+            return False
+    elif state not in closed_states():
+        return False
+
+    if inv_e is None and process in EXCLUDED.setdefault("PROCESSES", []):
+        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
+        return False
+    if inv_e is not None and process not in EXCLUDED.setdefault("PROCESSES", []):
+        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
+        return False
+
+    if states is not None and state not in states:
+        return False
+    if inv_states is not None and state in inv_states:
+        return False
+
+    if protos is not None and proto not in protos:
+        return False
+    if inv_protos is not None and proto in inv_protos:
+        return False
+
+    pp = SERVER.get(host).get("NETSTAT").setdefault(f"{local_port}_{proto}", [])
+    try:
+        pp.remove(value)
+    except ValueError:
+        pass
+    finally:
+        pp.append(value)
+
+    return True
+
+
 def parse_linux_ps(host, line, header_match):
     ''' Match a Linux ps output '''
 
@@ -271,38 +386,20 @@ def parse_linux_ps(host, line, header_match):
     process = args[0]
     args = shlex.join(args[1:])
 
-    if "-" in pid:
-        # Skip; it's part of the header
-        return matched
+    new_val = {
+        "UID" : uid,
+        "PID" : pid,
+        "PPID" : ppid,
+        "C" : c,
+        "STIME" : stime,
+        "TTY" : tty,
+        "TIME" : time,
+        "PROCESS" : process,
+        "ARGS" : args,
+    }
 
-    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and process in EXCLUDED.setdefault("PROCESSES", []):
-        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
-        return matched
-    if inv_e is not None and process not in EXCLUDED.setdefault("PROCESSES", []):
-        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
-        return matched
+    shared_ps(new_val, host)
 
-    if (users := GLOBALS.get("USERS")) is not None and uid not in users:
-        return matched
-    if (users := GLOBALS.get("INV_USERS")) is not None and uid in users:
-        return matched
-
-    if not GLOBALS.get("GROUP"):
-        process = f"{process}?{pid}"
-
-    SERVER.get(host).get("PS").update({
-        f"{pid}" : {
-            "UID" : uid,
-            "PID" : pid,
-            "PPID" : ppid,
-            "C" : c,
-            "STIME" : stime,
-            "TTY" : tty,
-            "TIME" : time,
-            "PROCESS" : process,
-            "ARGS" : args
-        }
-    })
     return matched
 
 
@@ -325,50 +422,6 @@ def parse_linux_netstat(host, line, header_match):
     process = matched.group(10).lower()
     timer = matched.group(11).lower()
 
-    add_dns(host, local_host)
-
-    if "*" in local_port:
-        # Don't bother if the port isn't set up
-        print(f"WARNING: Local port isn't set up: `{line}`")
-        return matched
-
-    port_type = "port"
-    if state in ("listening", "listen", "syn_received", "syn_recv") or remote_port in ("*", "0", "") or not is_ephemeral(local_port):
-        port_type += "_portin"
-    if state in ("syn_send", "syn_sent") or is_ephemeral(local_port):
-        port_type += "_portout"
-
-    if local_port in ("*", ""):
-        local_port = "0"
-    if remote_port in ("*", ""):
-        remote_port = "0"
-
-    if remote_host == "*":
-        remote_host = ""
-
-    if not GLOBALS.get("INV_INCLUDE_CLOSED"):
-        if not GLOBALS.get("INCLUDE_CLOSED") and state in closed_states():
-            return matched
-    elif state not in closed_states():
-        return matched
-
-    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and process in EXCLUDED.setdefault("PROCESSES", []):
-        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
-        return matched
-    if inv_e is not None and process not in EXCLUDED.setdefault("PROCESSES", []):
-        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
-        return matched
-
-    if (states := GLOBALS.get("STATES")) is not None and state not in states:
-        return matched
-    if (states := GLOBALS.get("INV_STATES")) is not None and state in states:
-        return matched
-
-    if (protos := GLOBALS.get("PROTOS")) is not None and proto not in protos:
-        return matched
-    if (protos := GLOBALS.get("INV_PROTOS")) is not None and proto in protos:
-        return matched
-
     new_val = {
         "PROTO" : proto,
         "RECV_Q" : recv_q,
@@ -381,16 +434,9 @@ def parse_linux_netstat(host, line, header_match):
         "PID" : pid,
         "PROCESS" : process,
         "TIMER" : timer,
-        "PORT_TYPE" : port_type,
     }
 
-    pp = SERVER.get(host).get("NETSTAT").setdefault(f"{local_port}_{proto}", [])
-    try:
-        pp.remove(new_val)
-    except ValueError:
-        pass
-    finally:
-        pp.append(new_val)
+    shared_netstat(new_val, host)
 
     return matched
 
@@ -407,27 +453,14 @@ def parse_windows_gp(host, line, header_match):
     process = args[0:len(header_match.group(1))].strip()
     args = args[len(header_match.group(1)):]
 
-    if "-" in pid:
-        # Skip; it's part of the header
-        return matched
+    new_val = {
+        "PID" : pid,
+        "PROCESS" : process,
+        "ARGS" : args,
+    }
 
-    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and process in EXCLUDED.setdefault("PROCESSES", []):
-        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
-        return matched
-    if inv_e is not None and process not in EXCLUDED.setdefault("PROCESSES", []):
-        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
-        return matched
+    shared_ps(new_val, host)
 
-    if not GLOBALS.get("GROUP"):
-        process = f"{process}?{pid}"
-
-    SERVER.get(host).get("PS").update({
-        f"{pid}" : {
-            "PID" : pid,
-            "PROCESS" : process,
-            "ARGS" : args,
-        }
-    })
     return matched
 
 
@@ -446,31 +479,17 @@ def parse_windows_ps(host, line, header_match):
     process = args[0]
     args = shlex.join(args[1:])
 
-    if (inv_e := GLOBALS.get("INV_EXCLUDE_FILE")) is None and process in EXCLUDED.setdefault("PROCESSES", []):
-        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
-        return matched
-    if inv_e is not None and process not in EXCLUDED.setdefault("PROCESSES", []):
-        EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
-        return matched
+    new_val = {
+        "UID" : uid,
+        "PID" : pid,
+        "PPID" : ppid,
+        "STIME" : stime,
+        "PROCESS" : process,
+        "ARGS" : args,
+    }
 
-    if (users := GLOBALS.get("USERS")) is not None and uid not in users:
-        return matched
-    if (users := GLOBALS.get("INV_USERS")) is not None and uid in users:
-        return matched
+    shared_ps(new_val, host)
 
-    if not GLOBALS.get("GROUP"):
-        process = f"{process}?{pid}"
-
-    SERVER.get(host).get("PS").update({
-        f"{pid}" : {
-            "UID" : uid,
-            "PID" : pid,
-            "PPID" : ppid,
-            "STIME" : stime,
-            "PROCESS" : process,
-            "ARGS" : args,
-        }
-    })
     return matched
 
 
@@ -489,46 +508,6 @@ def parse_windows_netstat(host, line, header_match):
     state = matched.group(6).lower()
     pid = matched.group(7).lower()
 
-    add_dns(host, local_host)
-
-    if "*" in local_port:
-        # Don't bother if the port isn't set up
-        print(f"WARNING: Local port isn't set up: `{line}`")
-        return matched
-
-    port_type = "port"
-    if state in ("listening", "listen", "syn_received", "syn_recv") or remote_port in ("*", "0", "") or not is_ephemeral(local_port):
-        port_type += "_portin"
-    if state in ("syn_send", "syn_sent") or is_ephemeral(local_port):
-        port_type += "_portout"
-
-    if local_port in ("*", ""):
-        local_port = "0"
-    if remote_port in ("*", ""):
-        remote_port = "0"
-
-    if remote_host == "*":
-        remote_host = ""
-
-    if not GLOBALS.get("INV_INCLUDE_CLOSED"):
-        if not GLOBALS.get("INCLUDE_CLOSED") and state in closed_states():
-            return matched
-    elif state not in closed_states():
-        return matched
-
-    if MATCHER.get("IPV6").fullmatch(local_host) or MATCHER.get("IPV6").fullmatch(remote_host):
-        proto += "6"
-
-    if (states := GLOBALS.get("STATES")) is not None and state not in states:
-        return matched
-    if (states := GLOBALS.get("INV_STATES")) is not None and state in states:
-        return matched
-
-    if (protos := GLOBALS.get("PROTOS")) is not None and proto not in protos:
-        return matched
-    if (protos := GLOBALS.get("INV_PROTOS")) is not None and proto in protos:
-        return matched
-
     new_val = {
         "PROTO" : proto,
         "LOCAL_HOST" : local_host,
@@ -537,16 +516,9 @@ def parse_windows_netstat(host, line, header_match):
         "REMOTE_PORT" : remote_port,
         "STATE" : state,
         "PID" : pid,
-        "PORT_TYPE" : port_type,
     }
 
-    pp = SERVER.get(host).get("NETSTAT").setdefault(f"{local_port}_{proto}", [])
-    try:
-        pp.remove(new_val)
-    except ValueError:
-        pass
-    finally:
-        pp.append(new_val)
+    shared_netstat(new_val, host)
 
     return matched
 
@@ -677,6 +649,9 @@ def map_servers():
 def add_dns(hostname, ip):
     ''' Adds a record to the DNS '''
 
+    if ip is None or ip == "":
+        return
+
     if MATCHER.get("LOCAL_IP").fullmatch(ip):
         return
 
@@ -688,7 +663,7 @@ def add_dns(hostname, ip):
 def get_dns(ip, local_host, local_port, remote_port, state, proto):
     ''' Gets DNS record '''
 
-    if ip is None:
+    if ip is None or ip == "":
         return [None]
 
     if MATCHER.get("LOCAL_IP").fullmatch(ip):
