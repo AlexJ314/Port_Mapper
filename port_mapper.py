@@ -296,10 +296,10 @@ def parse_linux_netstat(host, line, header_match):
         return matched
 
     port_type = "port"
-    if state in ("listening", "listen", "syn_received", "syn_recv") or remote_port in ("*", "0", ""):
-        port_type = "portin"
-    elif state in ("syn_send", "syn_sent"):
-        port_type = "portout"
+    if state in ("listening", "listen", "syn_received", "syn_recv") or remote_port in ("*", "0", "") or not is_ephemeral(local_port):
+        port_type += "_portin"
+    if state in ("syn_send", "syn_sent") or is_ephemeral(local_port):
+        port_type += "_portout"
 
     if local_port in ("*", ""):
         local_port = "0"
@@ -447,10 +447,10 @@ def parse_windows_netstat(host, line, header_match):
         return matched
 
     port_type = "port"
-    if state in ("listening", "listen", "syn_received", "syn_recv") or remote_port in ("*", "0", ""):
-        port_type = "portin"
-    elif state in ("syn_send", "syn_sent"):
-        port_type = "portout"
+    if state in ("listening", "listen", "syn_received", "syn_recv") or remote_port in ("*", "0", "") or not is_ephemeral(local_port):
+        port_type += "_portin"
+    if state in ("syn_send", "syn_sent") or is_ephemeral(local_port):
+        port_type += "_portout"
 
     if local_port in ("*", ""):
         local_port = "0"
@@ -789,7 +789,7 @@ def make_node(hostname, server, _conns, add_label=False):
                     name = f"<u>{name}</u>"
 
                 label_puml = f"  label \"{name}\" as {label_name(hostname, port, conn.get("PROTO"))}"
-                port_puml = f"  {conn.get("PORT_TYPE")} \" \" as {port_name(hostname, port, conn.get("PROTO"))}"
+                port_puml = f"  port \" \" as {port_name(hostname, port, conn.get("PROTO"))}"
 
                 if label_puml not in ret and port_puml not in ret:
                     ret.append(label_puml)
@@ -853,7 +853,7 @@ def end_args(hostname, name, args):
     return ""
 
 
-def connection_type(conn, priority=2, hidden=False):
+def connection_type(conn, priority=2, hidden=False, port_to_port=False):
     ''' What the arrows look like '''
 
     line_start = "-"
@@ -879,14 +879,16 @@ def connection_type(conn, priority=2, hidden=False):
         if c not in conn.get("LOCAL_HOST") and "#blue" not in style:
             style.append("#blue")
 
-    if conn.get("PORT_TYPE") == "portin":
-        arrow_start = "<"
-        style.append("#green")
-    elif conn.get("PORT_TYPE") == "portout":
-        arrow_start = ">"
+    if not port_to_port:
+        if "portin" in conn.get("PORT_TYPE"):
+            arrow_start = "<"
+        if "portout" in conn.get("PORT_TYPE"):
+            arrow_end = ">"
 
     if state in ("bound",):
         style.append("#red")
+    elif state in ("listen", "listening"):
+        style.append("#green")
 
     style = ",".join(style)
     if len(style) > 0:
@@ -982,11 +984,11 @@ def make_connection(hostname, proc, args, conn):
     for remote_host in conn.get("REMOTE_HOST"):
         if not (remote_port := conn.get("REMOTE_PORT")) == "0":
             puml = (f"{port_name(hostname, local_port, conn.get("PROTO"))}"
-                    f"{connection_type(conn, priority=-1)}"
+                    f"{connection_type(conn, priority=-1, port_to_port=True)}"
                     f"{port_name(remote_host, remote_port, conn.get("PROTO"))}")
 
             rpuml = (f"{port_name(remote_host, remote_port, conn.get("PROTO"))}"
-                    f"{connection_type(conn, priority=-1)}"
+                    f"{connection_type(conn, priority=-1, port_to_port=True)}"
                     f"{port_name(hostname, local_port, conn.get("PROTO"))}")
 
             if rpuml not in connections:
