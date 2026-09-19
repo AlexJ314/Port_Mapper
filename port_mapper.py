@@ -40,6 +40,7 @@
 
 
 import io, os, re, argparse, shlex, subprocess, csv
+import xml.etree.ElementTree as ET
 
 
 
@@ -1155,16 +1156,11 @@ def make_interactive(svg_file):
 
     print("Making SVG interactive")
 
-    with open(GLOBALS.get("SVG_FUNCTION"), "r", encoding="utf-8", newline='') as fin:
-        svg_function = fin.read()
-
-    with open(svg_file, "r", encoding="utf-8", newline='') as fin:
-        svg_string = fin.read()
-
-    svg_string = svg_string.replace("<defs/>", svg_function, 1)
-
-    with open(svg_file, "w", encoding="utf-8", newline='') as fout:
-        fout.write(svg_string)
+    svg_function = ET.parse(GLOBALS.get("SVG_FUNCTION")).getroot()
+    svg_puml = ET.parse(svg_file)
+    svg_puml.getroot().append(svg_function)
+    ET.register_namespace("", "http://www.w3.org/2000/svg")
+    svg_puml.write(svg_file)
 
 
 def build_arg_parse():
