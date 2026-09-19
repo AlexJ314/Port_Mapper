@@ -25,7 +25,7 @@ Run `port_mapper.py -r` to NOT replace ephemeral ports in the csv
 
 Run `port_mapper.py -k` to keep unique ephemeral ports in the diagram instead of merging them by process
 
-Run `port_mapper.py -x <exlude_file>` to choose the exclude file, that is, which processes are ignored
+Run `port_mapper.py -x <exclude_file>` to choose the exclude file, that is, which processes are ignored
  - `-!x` inverts this argument
 
 Run `port_mapper.py -c` to include closed connections
@@ -35,6 +35,7 @@ Run `port_mapper.py -p` to only include processes with associated ports
  - `-!p` inverts this argument
 
 Run `port_mapper.py -u <user1> <user2...>` to only include processes being run by the given user(s)
+ - Only works if your input files list associated user(s)
  - `-!u` inverts this argument
 
 Run `port_mapper.py -s <state1> <state2...>` to only include the given state(s)
