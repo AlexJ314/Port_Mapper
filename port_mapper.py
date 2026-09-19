@@ -388,6 +388,8 @@ def parse_linux_netstat(host, line, header_match):
     try:
         pp.remove(new_val)
     except ValueError:
+        pass
+    finally:
         pp.append(new_val)
 
     return matched
@@ -542,6 +544,8 @@ def parse_windows_netstat(host, line, header_match):
     try:
         pp.remove(new_val)
     except ValueError:
+        pass
+    finally:
         pp.append(new_val)
 
     return matched
@@ -1156,9 +1160,14 @@ def make_interactive(svg_file):
 
     print("Making SVG interactive")
 
+    # Load the svgs
     svg_function = ET.parse(GLOBALS.get("SVG_FUNCTION")).getroot()
     svg_puml = ET.parse(svg_file)
+
+    # Add the functions
     svg_puml.getroot().append(svg_function)
+
+    # Write the svg
     ET.register_namespace("", "http://www.w3.org/2000/svg")
     svg_puml.write(svg_file)
 
