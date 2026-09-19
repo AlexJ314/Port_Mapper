@@ -29,25 +29,25 @@ legend top left
    Dotted: Closed
 end legend
 node "serverA" as n_serverA {
-  label "<b>1</b>" as l_serverA_1_tcp
-  portin " " as p_serverA_1_tcp
-  label "<b>20</b>" as l_serverA_20_tcp
+  label "<b>1</b>" as l_p_serverA_1_tcp
+  port " " as p_serverA_1_tcp
+  label "<b>20</b>" as l_p_serverA_20_tcp
   port " " as p_serverA_20_tcp
-  label "<b>10</b>" as l_serverA_10_tcp
+  label "<b>10</b>" as l_p_serverA_10_tcp
   port " " as p_serverA_10_tcp
-  label "<b><u>300</u></b>" as l_serverA_300_tcp6
+  label "<u><b>300</b></u>" as l_p_serverA_300_tcp6
   port " " as p_serverA_300_tcp6
-  label "<i><u>40001</u></i>" as l_serverA_40001_udp6
+  label "<u><i>40001</i></u>" as l_p_serverA_40001_udp6
   port " " as p_serverA_40001_udp6
-  label "<b>80</b>" as l_serverA_80_udp
+  label "<b>80</b>" as l_p_serverA_80_udp
   port " " as p_serverA_80_udp
-  label "<b>443</b>" as l_serverA_443_udp
+  label "<b>443</b>" as l_p_serverA_443_udp
   port " " as p_serverA_443_udp
-  label "<b>8080</b>" as l_serverA_8080_tcp
+  label "<b>8080</b>" as l_p_serverA_8080_tcp
   port " " as p_serverA_8080_tcp
-  label "<b>53</b>" as l_serverA_53_tcp
+  label "<b>53</b>" as l_p_serverA_53_tcp
   port " " as p_serverA_53_tcp
-  label "<b><u>30001</u></b>" as l_serverA_30001_tcp6
+  label "<u><b>30001</b></u>" as l_p_serverA_30001_tcp6
   port " " as p_serverA_30001_tcp6
   component "process1" as c_serverA_process1 {
     card cd_serverA_process1_iU0020amU0020process1 [
@@ -83,15 +83,15 @@ node "serverA" as n_serverA {
   }
 }
 node "serverB" as n_serverB {
-  label "<b><u>200</u></b>" as l_serverB_200_tcp6
+  label "<u><b>200</b></u>" as l_p_serverB_200_tcp6
   port " " as p_serverB_200_tcp6
-  label "<b><u>3000</u></b>" as l_serverB_3000_udp6
+  label "<u><b>3000</b></u>" as l_p_serverB_3000_udp6
   port " " as p_serverB_3000_udp6
-  label "<b>53</b>" as l_serverB_53_udp
+  label "<b>53</b>" as l_p_serverB_53_udp
   port " " as p_serverB_53_udp
-  label "<i>40000</i>" as l_serverB_40000_udp
+  label "<i>40000</i>" as l_p_serverB_40000_udp
   port " " as p_serverB_40000_udp
-  label "<i>55555</i>" as l_serverB_55555_udp
+  label "<i>55555</i>" as l_p_serverB_55555_udp
   port " " as p_serverB_55555_udp
   component "process1" as c_serverB_process1 {
     card cd_serverB_process1_iU0020amU0020process1 [
@@ -113,11 +113,11 @@ node "serverB" as n_serverB {
   }
 }
 node "serverC" as n_serverC {
-  label "<i>50000</i>" as l_serverC_50000_udp
+  label "<i>50000</i>" as l_p_serverC_50000_udp
   port " " as p_serverC_50000_udp
-  label "<b>600</b>" as l_serverC_600_tcp
+  label "<b>600</b>" as l_p_serverC_600_tcp
   port " " as p_serverC_600_tcp
-  label "<b>443</b>" as l_serverC_443_udp
+  label "<b>443</b>" as l_p_serverC_443_udp
   port " " as p_serverC_443_udp
   component "insecure" as c_serverC_insecure {
     card cd_serverC_insecure_iU0020amU0020insecure [
@@ -135,64 +135,64 @@ node "serverC" as n_serverC {
 node " " as n_100U002E000U002E000U002E4 {
   label "<b>100<U+002E>000<U+002E>000<U+002E>4</b>" as ln_100U002E000U002E000U002E4
   n_100U002E000U002E000U002E4 -[hidden]u- ln_100U002E000U002E000U002E4
-  label "<b>700</b>" as l_100U002E000U002E000U002E4_700_tcp
+  label "<b>700</b>" as l_p_100U002E000U002E000U002E4_700_tcp
   port " " as p_100U002E000U002E000U002E4_700_tcp
-  label "<b>701</b>" as l_100U002E000U002E000U002E4_701_udp
+  label "<b>701</b>" as l_p_100U002E000U002E000U002E4_701_udp
   port " " as p_100U002E000U002E000U002E4_701_udp
 }
 node " " as n_100U002E000U002E000U002E5 {
   label "<b>100<U+002E>000<U+002E>000<U+002E>5</b>" as ln_100U002E000U002E000U002E5
   n_100U002E000U002E000U002E5 -[hidden]u- ln_100U002E000U002E000U002E5
-  label "<b><u>800</u></b>" as l_100U002E000U002E000U002E5_800_tcp6
+  label "<u><b>800</b></u>" as l_p_100U002E000U002E000U002E5_800_tcp6
   port " " as p_100U002E000U002E000U002E5_800_tcp6
 }
-l_serverA_1_tcp <-[#green]- p_serverA_1_tcp
-l_serverA_20_tcp -- p_serverA_20_tcp
-l_serverA_10_tcp -- p_serverA_10_tcp
-l_serverA_300_tcp6 -[#blue]- p_serverA_300_tcp6
-l_serverA_40001_udp6 -[dashed,#blue]- p_serverA_40001_udp6
-l_serverA_80_udp -[dotted,norank,#blue]- p_serverA_80_udp
-l_serverA_443_udp -[dashed,#blue]- p_serverA_443_udp
-l_serverA_8080_tcp -[#blue]- p_serverA_8080_tcp
-l_serverA_53_tcp -[#blue,#red]- p_serverA_53_tcp
-l_serverA_30001_tcp6 -[dotted,norank,#blue]- p_serverA_30001_tcp6
-l_serverB_200_tcp6 -[#blue]- p_serverB_200_tcp6
-l_serverB_3000_udp6 -[dashed,#blue]- p_serverB_3000_udp6
-l_serverB_53_udp -[dashed,#blue]- p_serverB_53_udp
-l_serverB_40000_udp -[dashed,#blue]- p_serverB_40000_udp
-l_serverB_55555_udp -[dashed,#blue]- p_serverB_55555_udp
-l_serverC_50000_udp -[dotted,norank,#blue]- p_serverC_50000_udp
-l_serverC_600_tcp -[#blue]- p_serverC_600_tcp
-l_serverC_443_udp -[dashed,#blue]- p_serverC_443_udp
-l_100U002E000U002E000U002E4_700_tcp -[#blue,#red]- p_100U002E000U002E000U002E4_700_tcp
-l_100U002E000U002E000U002E4_701_udp -[dashed,#blue]- p_100U002E000U002E000U002E4_701_udp
-l_100U002E000U002E000U002E5_800_tcp6 -[dotted,norank,#blue]- p_100U002E000U002E000U002E5_800_tcp6
-p_serverA_20_tcp -[norank]- p_serverA_10_tcp
-cd_serverB_process1_iU0020amU0020process1 -[#blue]- l_serverB_200_tcp6
-cd_serverA_process3_ -- l_serverA_20_tcp
-p_serverA_40001_udp6 -[norank,dashed,#blue]- p_serverB_3000_udp6
-p_serverA_8080_tcp -[norank,#blue]- p_serverC_600_tcp
-p_serverA_53_tcp -[norank,#blue,#red]- p_100U002E000U002E000U002E4_700_tcp
-p_serverA_30001_tcp6 -[norank,dotted,norank,#blue]- p_100U002E000U002E000U002E5_800_tcp6
-cd_serverB_processc_ -[dashed,#blue]- l_serverB_55555_udp
-cd_serverA_process4_3U0020hasU0020noU0020args -[dashed,#blue]- l_serverA_40001_udp6
-cd_serverA_process4_3U0020hasU0020noU0020args -[#blue]- l_serverA_300_tcp6
-cd_serverA_process3_ -- l_serverA_10_tcp
-cd_serverA_process1_iU0020amU0020process1 <-[#green]- l_serverA_1_tcp
-cd_serverA_process4_4U0020hasU0020threeU0020processes -[dotted,norank,#blue]- l_serverA_80_udp
-cd_serverB_processtwo_U002DU002DsomeU005FargU0020here -[dashed,#blue]- l_serverB_53_udp
-p_serverB_55555_udp -[norank,dashed,#blue]- p_serverC_443_udp
-cd_serverA_process4_andU0020manyU0020connectionsU0021 -[dashed,#blue]- l_serverA_443_udp
-cd_serverC_insecure_iU0020amU0020insecure -[dotted,norank,#blue]- l_serverC_50000_udp
-cd_serverB_processc_ -[dashed,#blue]- l_serverB_40000_udp
-p_serverA_443_udp -[norank,dashed,#blue]- p_serverB_40000_udp
-p_serverB_53_udp -[norank,dashed,#blue]- p_100U002E000U002E000U002E4_701_udp
-cd_serverA_process4_andU0020manyU0020connectionsU0021 -[dotted,norank,#blue]- l_serverA_30001_tcp6
-cd_serverA_process4_andU0020manyU0020connectionsU0021 -[#blue,#red]- l_serverA_53_tcp
-p_serverA_300_tcp6 -[norank,#blue]- p_serverB_200_tcp6
-cd_serverC_insecure_iU0020amU0020insecure -[#blue]- l_serverC_600_tcp
+l_p_serverA_1_tcp <-[#green]- p_serverA_1_tcp
+l_p_serverA_20_tcp <-- p_serverA_20_tcp
+l_p_serverA_10_tcp <-- p_serverA_10_tcp
+l_p_serverA_300_tcp6 <-[#blue]- p_serverA_300_tcp6
+l_p_serverA_40001_udp6 -[dashed,#blue]-> p_serverA_40001_udp6
+l_p_serverA_80_udp <-[dotted,norank,#blue]- p_serverA_80_udp
+l_p_serverA_443_udp <-[dashed,#blue]- p_serverA_443_udp
+l_p_serverA_8080_tcp <-[#blue]- p_serverA_8080_tcp
+l_p_serverA_53_tcp <-[#blue,#red]- p_serverA_53_tcp
+l_p_serverA_30001_tcp6 <-[dotted,norank,#blue]- p_serverA_30001_tcp6
+l_p_serverB_200_tcp6 <-[#blue]- p_serverB_200_tcp6
+l_p_serverB_3000_udp6 <-[dashed,#blue]- p_serverB_3000_udp6
+l_p_serverB_53_udp <-[dashed,#blue]- p_serverB_53_udp
+l_p_serverB_40000_udp -[dashed,#blue]-> p_serverB_40000_udp
+l_p_serverB_55555_udp -[dashed,#blue]-> p_serverB_55555_udp
+l_p_serverC_50000_udp -[dotted,norank,#blue]-> p_serverC_50000_udp
+l_p_serverC_600_tcp <-[#blue]- p_serverC_600_tcp
+l_p_serverC_443_udp <-[dashed,#blue]- p_serverC_443_udp
+l_p_100U002E000U002E000U002E4_700_tcp -[#blue,#red]- p_100U002E000U002E000U002E4_700_tcp
+l_p_100U002E000U002E000U002E4_701_udp -[dashed,#blue]- p_100U002E000U002E000U002E4_701_udp
+l_p_100U002E000U002E000U002E5_800_tcp6 -[dotted,norank,#blue]- p_100U002E000U002E000U002E5_800_tcp6
 p_serverA_80_udp -[norank,dotted,norank,#blue]- p_serverC_50000_udp
-cd_serverB_processtwo_U002DU002DsomeU005FargU0020here -[dashed,#blue]- l_serverB_3000_udp6
-cd_serverC_secure_iU0020amU0020secure -[dashed,#blue]- l_serverC_443_udp
-cd_serverA_process4_andU0020manyU0020connectionsU0021 -[#blue]- l_serverA_8080_tcp
+p_serverA_443_udp -[norank,dashed,#blue]- p_serverB_40000_udp
+cd_serverA_process4_andU0020manyU0020connectionsU0021 <-[dashed,#blue]- l_p_serverA_443_udp
+p_serverA_53_tcp -[norank,#blue,#red]- p_100U002E000U002E000U002E4_700_tcp
+cd_serverB_processtwo_U002DU002DsomeU005FargU0020here <-[dashed,#blue]- l_p_serverB_3000_udp6
+p_serverA_8080_tcp -[norank,#blue]- p_serverC_600_tcp
+p_serverA_20_tcp -[norank]- p_serverA_10_tcp
+p_serverA_300_tcp6 -[norank,#blue]- p_serverB_200_tcp6
+p_serverB_53_udp -[norank,dashed,#blue]- p_100U002E000U002E000U002E4_701_udp
+cd_serverB_process1_iU0020amU0020process1 <-[#blue]- l_p_serverB_200_tcp6
+cd_serverA_process4_andU0020manyU0020connectionsU0021 <-[dotted,norank,#blue]- l_p_serverA_30001_tcp6
+cd_serverB_processtwo_U002DU002DsomeU005FargU0020here <-[dashed,#blue]- l_p_serverB_53_udp
+p_serverB_55555_udp -[norank,dashed,#blue]- p_serverC_443_udp
+cd_serverC_secure_iU0020amU0020secure <-[dashed,#blue]- l_p_serverC_443_udp
+cd_serverA_process3_ <-- l_p_serverA_10_tcp
+cd_serverA_process3_ <-- l_p_serverA_20_tcp
+cd_serverA_process4_andU0020manyU0020connectionsU0021 <-[#blue]- l_p_serverA_8080_tcp
+cd_serverC_insecure_iU0020amU0020insecure -[dotted,norank,#blue]-> l_p_serverC_50000_udp
+cd_serverA_process1_iU0020amU0020process1 <-[#green]- l_p_serverA_1_tcp
+cd_serverA_process4_3U0020hasU0020noU0020args <-[#blue]- l_p_serverA_300_tcp6
+p_serverA_30001_tcp6 -[norank,dotted,norank,#blue]- p_100U002E000U002E000U002E5_800_tcp6
+cd_serverB_processc_ -[dashed,#blue]-> l_p_serverB_40000_udp
+cd_serverA_process4_andU0020manyU0020connectionsU0021 <-[#blue,#red]- l_p_serverA_53_tcp
+cd_serverA_process4_4U0020hasU0020threeU0020processes <-[dotted,norank,#blue]- l_p_serverA_80_udp
+p_serverA_40001_udp6 -[norank,dashed,#blue]- p_serverB_3000_udp6
+cd_serverB_processc_ -[dashed,#blue]-> l_p_serverB_55555_udp
+cd_serverC_insecure_iU0020amU0020insecure <-[#blue]- l_p_serverC_600_tcp
+cd_serverA_process4_3U0020hasU0020noU0020args -[dashed,#blue]-> l_p_serverA_40001_udp6
 @enduml
