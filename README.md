@@ -1,6 +1,8 @@
 # Port_Mapper
 Map the ports and processes between servers
 
+---
+
 ## How To:
 On each server you're interested in, get the current lists of ports and processes as an admin user.
 Save these outputs to `./input` and run `port_mapper.py`.
@@ -49,29 +51,43 @@ Run `port_mapper.py -s <state1> <state2...>` to only include the given state(s)
 Run `port_mapper.py -l <proto1> <proto2...>` to only include the given protocol(s)
  - `-!l` inverts this argument
 
+---
+
 ## Linux:
+### Get the ports:
  - `sudo netstat -pan > ${HOSTNAME}_netstat.txt`
    - **OR**
  - `sudo netstat -panc > ${HOSTNAME}_netstat.txt`
    - Updates every second, needs to be stopped with `CTRL + C`
+### Get the processes:
  - `sudo ps -ef > ${HOSTNAME}_ps.txt`
 
+---
+
 ## Windows (cmd, preferred):
+### Get the ports:
  - `netstat -anoq > %COMPUTERNAME%_netstat.txt`
     - **OR**
  - `netstat -anoq 1 > %COMPUTERNAME%_netstat.txt`
    - Updates every second, needs to be stopped with `CTRL + C`
+### Get the processes:
  - `ps -ef > %COMPUTERNAME%_ps.txt`
    - To be clear, this `ps` is a port of Linux's `ps`, NOT an alias of powershell's `Get-Process`
 
+---
+
 ## Windows (powershell):
+### Get the ports:
  - `netstat -anoq > ${Env:COMPUTERNAME}_netstat.txt`
     - **OR**
  - `netstat -anoq 1 > %COMPUTERNAME%_netstat.txt`
    - Updates every second, needs to be stopped with `CTRL + C`
+### Get the processes:
  - `Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
    - **OR**
  - `Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
+
+---
 
 ## ToDo:
  - Make the svg interactive such that clicking nodes and connections highlights the connections
