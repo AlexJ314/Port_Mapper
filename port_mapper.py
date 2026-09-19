@@ -1,23 +1,42 @@
 """ port_mapper.py - Map the ports and processes between servers """
 # Linux:
-#   sudo netstat -pan > ${HOSTNAME}_netstat.txt
-#     OR
-#   sudo netstat -panc > ${HOSTNAME}_netstat.txt
-#   sudo ps -ef > ${HOSTNAME}_ps.txt
+#   Get ports:
+#     sudo netstat -pan > ${HOSTNAME}_netstat.txt
+#       OR
+#     sudo netstat -panc > ${HOSTNAME}_netstat.txt
+#
+#   Get processes:
+#     sudo ps -ef > ${HOSTNAME}_ps.txt
+#       OR
+#     while sleep 1; do sudo ps -ef >> ${HOSTNAME}_ps.txt; done
+#
 #
 # Windows (cmd):
-#   netstat -anoq > %COMPUTERNAME%_netstat.txt
-#     OR
-#   netstat -anoq 1 > %COMPUTERNAME%_netstat.txt
-#   ps -ef > %COMPUTERNAME%_ps.txt
+#   Get ports:
+#     netstat -anoq > %COMPUTERNAME%_netstat.txt
+#       OR
+#     netstat -anoq 1 > %COMPUTERNAME%_netstat.txt
+#
+#   Get processes:
+#     ps -ef > %COMPUTERNAME%_ps.txt
+#       OR
+#     for /l %l in (0,0,1) do @(ps -ef >> %COMPUTERNAME%_ps.txt && timeout /t 1)
+#
 #
 # Windows (powershell):
-#   netstat -anoq > ${Env:COMPUTERNAME}_netstat.txt
-#     OR
-#   netstat -anoq 1 > ${Env:COMPUTERNAME}_netstat.txt
-#   Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt
-#     OR
-#   Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt
+#   Get ports:
+#     netstat -anoq > ${Env:COMPUTERNAME}_netstat.txt
+#       OR
+#     netstat -anoq 1 > ${Env:COMPUTERNAME}_netstat.txt
+#
+#   Get processes:
+#     Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt
+#       OR
+#     while(1){Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine >> ${Env:COMPUTERNAME}_ps.txt;sleep 1}
+#       OR
+#     Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt
+#       OR
+#     while(1){Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine >> ${Env:COMPUTERNAME}_ps.txt;sleep 1}
 
 
 import io, os, re, argparse, shlex, subprocess, csv
@@ -43,7 +62,7 @@ GLOBALS = {
     "INV_PROTOS" : None,
     "REPLACE_EPHEMERAL" : True,
     "NO_EPHEMERAL" : True,
-    "NO_GROUP" : False,
+    "GROUP" : False,
     "PRUNE_EPHEMERAL" : True,
     "NO_INTERACTIVE" : False,
     "SVG_FUNCTION" : "./svg_function.svg",
@@ -91,7 +110,7 @@ def setup(args):
     GLOBALS.update({"NO_EPHEMERAL" : args.e})
     GLOBALS.update({"PRUNE_EPHEMERAL" : args.k})
     GLOBALS.update({"NO_INTERACTIVE" : args.v})
-    GLOBALS.update({"NO_GROUP" : args.g})
+    GLOBALS.update({"GROUP" : args.g})
 
     MATCHER.update({
         "HOST" : re.compile(r"([a-z0-9\-]+)", re.IGNORECASE),
@@ -267,7 +286,7 @@ def parse_linux_ps(host, line, header_match):
     if (users := GLOBALS.get("INV_USERS")) is not None and uid in users:
         return matched
 
-    if GLOBALS.get("NO_GROUP"):
+    if not GLOBALS.get("GROUP"):
         process = f"{process}?{pid}"
 
     SERVER.get(host).get("PS").update({
@@ -396,7 +415,7 @@ def parse_windows_gp(host, line, header_match):
         EXCLUDED.setdefault("HOSTNAME", {}).setdefault(host, []).append(pid)
         return matched
 
-    if GLOBALS.get("NO_GROUP"):
+    if not GLOBALS.get("GROUP"):
         process = f"{process}?{pid}"
 
     SERVER.get(host).get("PS").update({
@@ -436,7 +455,7 @@ def parse_windows_ps(host, line, header_match):
     if (users := GLOBALS.get("INV_USERS")) is not None and uid in users:
         return matched
 
-    if GLOBALS.get("NO_GROUP"):
+    if not GLOBALS.get("GROUP"):
         process = f"{process}?{pid}"
 
     SERVER.get(host).get("PS").update({
@@ -855,7 +874,7 @@ def make_process(hostname, name, args):
     ''' How to start a process '''
 
     display_name = name
-    if GLOBALS.get("NO_GROUP"):
+    if not GLOBALS.get("GROUP"):
         display_name = name.split("?")[0]
 
     return f"  component \"{puml_safe(display_name)}\" as {process_name(hostname, name, args)} {{"
@@ -876,7 +895,7 @@ def make_args(hostname, name, args):
     if len(args) > 1:
         ret += f"      {args}\n"
     else:
-        if GLOBALS.get("NO_GROUP"):
+        if not GLOBALS.get("GROUP"):
             name = name.split("?")[0]
         ret += f"      {puml_safe(name)}\n"
     ret += "    ]"
@@ -1165,7 +1184,7 @@ def build_arg_parse():
     parser.add_argument("-r", help=f"Do NOT replace ephemeral ports in csv with 'ephemeral'. Default is '{not GLOBALS.get("REPLACE_EPHEMERAL")}'", action=f"store_{not GLOBALS.get("REPLACE_EPHEMERAL")}".lower(), default=GLOBALS.get("REPLACE_EPHEMERAL"))
     parser.add_argument("-k", help=f"Keep ephemeral ports in diagram instead of pruning. Default is '{not GLOBALS.get("PRUNE_EPHEMERAL")}'", action=f"store_{not GLOBALS.get("PRUNE_EPHEMERAL")}".lower(), default=GLOBALS.get("PRUNE_EPHEMERAL"))
     parser.add_argument("-v", help=f"Generate a static SVG instead of interactive. Default is '{GLOBALS.get("NO_INTERACTIVE")}'", action=f"store_{not GLOBALS.get("NO_INTERACTIVE")}".lower(), default=GLOBALS.get("NO_INTERACTIVE"))
-    parser.add_argument("-g", help=f"Don't group many args under the same process. Default is '{GLOBALS.get("NO_GROUP")}'", action=f"store_{not GLOBALS.get("NO_GROUP")}".lower(), default=GLOBALS.get("NO_GROUP"))
+    parser.add_argument("-g", help=f"Group many args under the same process. Default is '{GLOBALS.get("GROUP")}'", action=f"store_{not GLOBALS.get("GROUP")}".lower(), default=GLOBALS.get("GROUP"))
     exclude_parser.add_argument("-x", help=f"Processes to exclude. Default is '{GLOBALS.get("EXCLUDE_FILE")}'", default=GLOBALS.get("EXCLUDE_FILE"))
     exclude_parser.add_argument("-!x", help=f"Processes to NOT exclude")
     port_parser.add_argument("-p", help=f"Only include processes with ports", action="store_true", default=False)

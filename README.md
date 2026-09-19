@@ -61,6 +61,9 @@ Run `port_mapper.py -l <proto1> <proto2...>` to only include the given protocol(
    - Updates every second, needs to be stopped with `CTRL + C`
 ### Get the processes:
  - `sudo ps -ef > ${HOSTNAME}_ps.txt`
+   - **OR**
+ - `while sleep 1; do sudo ps -ef >> ${HOSTNAME}_ps.txt; done`
+   - Updates every second, needs to be stopped with `CTRL + C`
 
 ---
 
@@ -73,6 +76,9 @@ Run `port_mapper.py -l <proto1> <proto2...>` to only include the given protocol(
 ### Get the processes:
  - `ps -ef > %COMPUTERNAME%_ps.txt`
    - To be clear, this `ps` is a port of Linux's `ps`, NOT an alias of powershell's `Get-Process`
+   - **OR**
+ - `for /l %l in (0,0,1) do @(ps -ef >> %COMPUTERNAME%_ps.txt && timeout /t 1)`
+   - Updates every second, needs to be stopped with `CTRL + C`
 
 ---
 
@@ -84,8 +90,14 @@ Run `port_mapper.py -l <proto1> <proto2...>` to only include the given protocol(
    - Updates every second, needs to be stopped with `CTRL + C`
 ### Get the processes:
  - `Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
+  - **OR**
+ - `while(1){Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine >> ${Env:COMPUTERNAME}_ps.txt;sleep 1}`
+    - Updates every second, needs to be stopped with `CTRL + C`
    - **OR**
  - `Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
+  - **OR**
+ - `while(1){Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine >> ${Env:COMPUTERNAME}_ps.txt;sleep 1}`
+    - Updates every second, needs to be stopped with `CTRL + C`
 
 ---
 
