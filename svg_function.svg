@@ -7,8 +7,7 @@ svg .entity {
 svg.dim > g > * {
     opacity: 0.3;
 }
-svg > g > g.selected,
-svg > g > line.selected {
+svg > g > .selected {
     opacity: 1.0;
 }
 ]]>
@@ -38,6 +37,8 @@ svg > g > line.selected {
     function line_select_connected(line) {
         svg.classList.add("dim");
         line.classList.add("selected");
+        line.setAttribute("originalStrokeWidth", line.style.strokeWidth);
+        line.style.strokeWidth = `${parseFloat(line.style.strokeWidth)*line_width_multiplier}px`;
         svg.querySelectorAll("line:not(.selected)").forEach(elm => {
             if (line_line_connect(elm, line)) {
                 line_select_connected(elm);
@@ -80,12 +81,25 @@ svg > g > line.selected {
         return close_less_equal(b, a);
     }
 
-    function line_line_connect(line, line2) {
-        return ((close_equal(line.getAttribute("x1"), line2.getAttribute("x1")) && close_equal(line.getAttribute("y1"), line2.getAttribute("y1"))) ||
-                (close_equal(line.getAttribute("x1"), line2.getAttribute("x2")) && close_equal(line.getAttribute("y1"), line2.getAttribute("y2"))) ||
-                (close_equal(line.getAttribute("x2"), line2.getAttribute("x1")) && close_equal(line.getAttribute("y2"), line2.getAttribute("y1"))) ||
-                (close_equal(line.getAttribute("x2"), line2.getAttribute("x2")) && close_equal(line.getAttribute("y2"), line2.getAttribute("y2")))
+    function point_on_point(x1, y1, x2, y2) {
+        return close_equal(parseFloat(x1), parseFloat(x2)) && close_equal(parseFloat(y1), parseFloat(y2));
+    }
+
+    function point_on_line(a, b, x1, y1, x2, y2) {
+        return (close_equal(parseFloat(b)*(parseFloat(x2)-parseFloat(x1)), parseFloat(a)*(parseFloat(y2)-parseFloat(y1))+parseFloat(y1)*parseFloat(x2)-parseFloat(y2)*parseFloat(x1)) &&
+                close_less_equal(0, (parseFloat(y2)-parseFloat(b))*(parseFloat(b)-parseFloat(y1))) &&
+                close_less_equal(0, (parseFloat(x2)-parseFloat(a))*(parseFloat(a)-parseFloat(x1)))
         );
+    }
+
+    function line_line_connect(line1, line2) {
+        for (let i=1; i <= 2; i++) {
+            if (point_on_point(line1.getAttribute(`x${i}`), line1.getAttribute(`y${i}`), line2.getAttribute("x1"), line2.getAttribute("y1")) ||
+                point_on_point(line1.getAttribute(`x${i}`), line1.getAttribute(`y${i}`), line2.getAttribute("x2"), line2.getAttribute("y2"))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function entity_line_connect(entity, line) {
@@ -99,31 +113,48 @@ svg > g > line.selected {
     }
 
     function rectangle_line_connect(rectangle, line) {
-        return ((close_equal(line.getAttribute("x1"), rectangle.getAttribute("x")) && close_greater_equal(line.getAttribute("y1"), rectangle.getAttribute("y")) && close_less_equal(line.getAttribute("y1"), parseFloat(rectangle.getAttribute("y")) + parseFloat(rectangle.getAttribute("height")))) ||
-                (close_equal(line.getAttribute("x2"), rectangle.getAttribute("x")) && close_greater_equal(line.getAttribute("y2"), rectangle.getAttribute("y")) && close_less_equal(line.getAttribute("y2"), parseFloat(rectangle.getAttribute("y")) + parseFloat(rectangle.getAttribute("height")))) ||
-                (close_equal(line.getAttribute("x1"), parseFloat(rectangle.getAttribute("x")) + parseFloat(rectangle.getAttribute("width"))) && close_greater_equal(line.getAttribute("y1"), rectangle.getAttribute("y")) && close_less_equal(line.getAttribute("y1"), parseFloat(rectangle.getAttribute("y")) + parseFloat(rectangle.getAttribute("height")))) ||
-                (close_equal(line.getAttribute("x2"), parseFloat(rectangle.getAttribute("x")) + parseFloat(rectangle.getAttribute("width"))) && close_greater_equal(line.getAttribute("y2"), rectangle.getAttribute("y")) && close_less_equal(line.getAttribute("y2"), parseFloat(rectangle.getAttribute("y")) + parseFloat(rectangle.getAttribute("height")))) ||
-                (close_equal(line.getAttribute("y1"), rectangle.getAttribute("y")) && close_greater_equal(line.getAttribute("x1"), rectangle.getAttribute("x")) && close_less_equal(line.getAttribute("x1"), parseFloat(rectangle.getAttribute("x")) + parseFloat(rectangle.getAttribute("width")))) ||
-                (close_equal(line.getAttribute("y2"), rectangle.getAttribute("y")) && close_greater_equal(line.getAttribute("x2"), rectangle.getAttribute("x")) && close_less_equal(line.getAttribute("x2"), parseFloat(rectangle.getAttribute("x")) + parseFloat(rectangle.getAttribute("width")))) ||
-                (close_equal(line.getAttribute("y1"), parseFloat(rectangle.getAttribute("y")) + parseFloat(rectangle.getAttribute("height"))) && close_greater_equal(line.getAttribute("x1"), rectangle.getAttribute("x")) && close_less_equal(line.getAttribute("x1"), parseFloat(rectangle.getAttribute("x")) + parseFloat(rectangle.getAttribute("width")))) ||
-                (close_equal(line.getAttribute("y2"), parseFloat(rectangle.getAttribute("y")) + parseFloat(rectangle.getAttribute("height"))) && close_greater_equal(line.getAttribute("x2"), rectangle.getAttribute("x")) && close_less_equal(line.getAttribute("x2"), parseFloat(rectangle.getAttribute("x")) + parseFloat(rectangle.getAttribute("width"))))
-        );
+        let x = parseFloat(rectangle.getAttribute("x"));
+        let y = parseFloat(rectangle.getAttribute("y"));
+        let w = parseFloat(rectangle.getAttribute("width"));
+        let h = parseFloat(rectangle.getAttribute("height"));
+        for (let i=1; i <= 2; i++) {
+            if (point_on_line(line.getAttribute(`x${i}`), line.getAttribute(`y${i}`), x, y, x+w, y) ||
+                point_on_line(line.getAttribute(`x${i}`), line.getAttribute(`y${i}`), x, y+h, x+w, y+h) ||
+                point_on_line(line.getAttribute(`x${i}`), line.getAttribute(`y${i}`), x, y, x, y+h) ||
+                point_on_line(line.getAttribute(`x${i}`), line.getAttribute(`y${i}`), x+w, y, x+w, y+h)) {
+                return true;
+            }
+        }
+        return false
     }
 
     function polygon_line_connect(polygon, line) {
-        // If line ends in / on polygon's points xy
+        let q = polygon.points.length;
+        for (let p=0; p<q; p++) {
+            for (let i=1; i <= 2; i++) {
+                if (point_on_line(line.getAttribute(`x${i}`), line.getAttribute(`y${i}`), polygon.points[p].x, polygon.points[p].y, polygon.points[(p+1)%q].x, polygon.points[(p+1)%q].y)) {
+                    return true;
+                }
+            }
+        }
         return false;
     }
 
     function deselect() {
         svg.classList.remove("dim");
-        svg.querySelectorAll(".selected").forEach(entity => {
-            entity.classList.remove("selected");
+        svg.querySelectorAll(".selected:not(line)").forEach(elm => {
+            elm.classList.remove("selected");
+        });
+        svg.querySelectorAll("line.selected").forEach(elm => {
+            elm.classList.remove("selected");
+            elm.style.strokeWidth = elm.getAttribute("originalStrokeWidth");
+            elm.removeAttribute("originalStrokeWidth");
         });
     }
 
     const svg = document.querySelector("svg");
     const epsilon = 0.01;
+    const line_width_multiplier = 1.2;
 
     document.addEventListener("DOMContentLoaded", () => {
         svg.querySelectorAll("g.entity").forEach(entity => {
