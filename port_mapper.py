@@ -49,6 +49,7 @@ GLOBALS = {
     "OUT_FILE" : "./output.puml",
     "EXCLUDE_FILE" : "./exclude.cfg",
     "INV_EXCLUDE_FILE" : None,
+    "KNOWN_FILE" : "./known_hosts.cfg",
     "EPHEMERAL" : 32768,
     "INCLUDE_CLOSED" : False,
     "INV_INCLUDE_CLOSED" : False,
@@ -81,6 +82,7 @@ def main(args):
     ''' Set up and run the thing '''
     setup(args)
     read_exclude()
+    read_known()
     read_dirs()
     map_servers()
     write_puml()
@@ -96,6 +98,7 @@ def setup(args):
     GLOBALS.update({"OUT_FILE" : args.o})
     GLOBALS.update({"EXCLUDE_FILE" : args.x})
     GLOBALS.update({"INV_EXCLUDE_FILE" : args.__dict__.get("!x")})
+    GLOBALS.update({"KNOWN_FILE" : args.d})
     GLOBALS.update({"INCLUDE_CLOSED" : args.c})
     GLOBALS.update({"INV_INCLUDE_CLOSED" : args.__dict__.get("!c")})
     GLOBALS.update({"PORTS_ONLY" : args.p})
@@ -546,7 +549,40 @@ def parse_exclude_file(fin):
     ''' Parses the given exclude file '''
 
     for line in fin:
-        EXCLUDED.setdefault("PROCESSES", []).append(line.strip())
+        line = line.strip()
+        if line.startswith("#"):
+            continue
+        EXCLUDED.setdefault("PROCESSES", []).append(line)
+
+
+def read_known():
+    ''' Reads configured known hosts '''
+
+    DNS.setdefault("KNOWN_HOSTS", {})
+    known_file = GLOBALS.get("KNOWN_FILE")
+    if not os.path.isfile(known_file):
+        print(f"Failed to find known hosts file `{known_file}`")
+        return
+
+    print("Reading known hosts file")
+    try:
+        with open(known_file, "r", encoding="utf-8") as fin:
+            parse_known_file(fin)
+    except UnicodeError:
+        with open(known_file, "r", encoding="utf-16") as fin:
+            parse_known_file(fin)
+
+
+def parse_known_file(fin):
+    ''' Parses the given known hosts file '''
+
+    for line in fin:
+        line = line.strip().split()
+        ip = line[0]
+        host = " ".join(line[1:])
+        if len(ip) < 1 or len(host) < 1 or ip.startswith("#"):
+            continue
+        DNS.setdefault("KNOWN_HOSTS", {}).update({ip : host})
 
 
 def is_ephemeral(port):
@@ -670,6 +706,8 @@ def get_dns(ip, local_host, local_port, remote_port, state, proto):
         return [local_host]
 
     if DNS.get(ip) is None and not ip == "":
+        if (nickname := DNS.get("KNOWN_HOSTS", {}).get(ip)) is not None:
+            ip = nickname
         unknown = DNS.setdefault("UNKNOWN", {})
         server = unknown.setdefault(ip, {})
         proc = server.setdefault(f"{remote_port}_{proto}", {})
@@ -1142,6 +1180,7 @@ def make_interactive(svg_file):
     # Add the functions
     svg_puml.getroot().append(svg_function)
 
+
     # Write the svg
     ET.register_namespace("", "http://www.w3.org/2000/svg")
     svg_puml.write(svg_file)
@@ -1165,8 +1204,9 @@ def build_arg_parse():
     parser.add_argument("-k", help=f"Keep ephemeral ports in diagram instead of pruning. Default is '{not GLOBALS.get("PRUNE_EPHEMERAL")}'", action=f"store_{not GLOBALS.get("PRUNE_EPHEMERAL")}".lower(), default=GLOBALS.get("PRUNE_EPHEMERAL"))
     parser.add_argument("-v", help=f"Generate a static SVG instead of interactive. Default is '{GLOBALS.get("NO_INTERACTIVE")}'", action=f"store_{not GLOBALS.get("NO_INTERACTIVE")}".lower(), default=GLOBALS.get("NO_INTERACTIVE"))
     parser.add_argument("-g", help=f"Group many args under the same process. Default is '{GLOBALS.get("GROUP")}'", action=f"store_{not GLOBALS.get("GROUP")}".lower(), default=GLOBALS.get("GROUP"))
-    exclude_parser.add_argument("-x", help=f"Processes to exclude. Default is '{GLOBALS.get("EXCLUDE_FILE")}'", default=GLOBALS.get("EXCLUDE_FILE"))
-    exclude_parser.add_argument("-!x", help=f"Processes to NOT exclude")
+    parser.add_argument("-d", help=f"DNS file of known hosts. Default is '{GLOBALS.get("KNOWN_FILE")}'", default=GLOBALS.get("KNOWN_FILE"))
+    exclude_parser.add_argument("-x", help=f"File of processes to exclude. Default is '{GLOBALS.get("EXCLUDE_FILE")}'", default=GLOBALS.get("EXCLUDE_FILE"))
+    exclude_parser.add_argument("-!x", help=f"File of processes to NOT exclude")
     port_parser.add_argument("-p", help=f"Only include processes with ports", action="store_true", default=False)
     port_parser.add_argument("-!p", help=f"Only include processes WITHOUT ports", action="store_true", default=False)
     user_parser.add_argument("-u", help=f"Only include processes being run by the given user(s)", nargs="+")

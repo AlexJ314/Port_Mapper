@@ -25,12 +25,16 @@ Run `port_mapper.py -e` to allow ephemeral ports to connect to other ephemeral p
 Run `port_mapper.py -r` to NOT replace ephemeral ports in the csv
  - This will probably make your csv massive
 
+Run `port_mapper.py -k` to keep unique ephemeral ports in the diagram instead of merging them by process
+
 Run `port_mapper.py -v` to generate a static svg instead of an interactive one
 
 Run `port_mapper.py -g` to prevent different arguments to the same process being grouped under one process
  - Useful if the diagram becomes unreadable when a few processes run dozens of times with different arguments
 
-Run `port_mapper.py -k` to keep unique ephemeral ports in the diagram instead of merging them by process
+Run `port_mapper.py -d <path/to/known_hosts_file>` to choose the known hosts file
+ - This file will act as the DNS resolver for unknown hosts
+ - Useful if your system is connecting to servers not included in the input files, but you know the IPs and hostnames
 
 Run `port_mapper.py -x <exclude_file>` to choose the exclude file, that is, which processes are ignored
  - `-!x` inverts this argument
