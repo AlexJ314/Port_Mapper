@@ -1,5 +1,8 @@
 # Port_Mapper
-Map the ports and processes between servers
+Map the ports and processes between servers as an interactive SVG diagram and CSV spreadsheet
+
+![Demo SVG diagram](demo/output.svg?raw=true)
+##### Note: this image is likely not interactive here due to browser security policies
 
 ---
 
@@ -102,8 +105,3 @@ Run `port_mapper.py -l <proto1> <proto2...>` to only include the given protocol(
   - **OR**
  - `while(1){Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine >> ${Env:COMPUTERNAME}_ps.txt;sleep 1}`
     - Updates every second, needs to be stopped with `CTRL + C`
-
----
-
-## ToDo:
- - Make the svg interactive such that clicking nodes and connections highlights the connections
