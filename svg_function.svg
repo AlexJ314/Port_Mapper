@@ -1,0 +1,209 @@
+<defs>
+<style type="text/css">
+<![CDATA[
+svg g.entity,
+svg g > line {
+    cursor: pointer;
+}
+svg.dim > g > * {
+    opacity: 0.3;
+}
+svg > g > .selected {
+    opacity: 1.0;
+}
+]]>
+</style>
+<script>
+//<![CDATA[
+(function () {
+    function on_click() {
+        if (this.classList.contains("selected")) {
+            deselect();
+        } else {
+            deselect();
+            if (this.classList.contains("entity")) {
+                entity_select_connected(this);
+            } else if (this.tagName == "line") {
+                line_select_connected(this);
+            }
+        }
+    }
+
+    function entity_select_connected(entity, can_propagate=true) {
+        if (entity.classList.contains("selected")) {
+            return;
+        }
+        svg.classList.add("dim");
+        entity.classList.add("selected");
+        if (!entity.getAttribute("data-qualified-name").split(".").at(-1).startsWith("cd_") || can_propagate) {
+            svg.querySelectorAll("line:not(.selected)").forEach(elm => {
+                if (entity_line_connect(entity, elm)) {
+                    line_select_connected(elm);
+                }
+            });
+        }
+    }
+
+    function line_select_connected(line) {
+        if (line.classList.contains("selected")) {
+            return;
+        }
+        svg.classList.add("dim");
+        line.classList.add("selected");
+        line.setAttribute("originalStrokeWidth", line.style.strokeWidth);
+        line.style.strokeWidth = `${parseFloat(line.style.strokeWidth)*line_width_multiplier}px`;
+        svg.querySelectorAll("line:not(.selected)").forEach(elm => {
+            if (line_line_connect(elm, line)) {
+                line_select_connected(elm);
+            }
+        });
+        svg.querySelectorAll("g.entity:not(.selected)").forEach(elm => {
+            if (entity_line_connect(elm, line)) {
+                entity_select_connected(elm, can_propagate=false);
+            }
+        });
+        svg.querySelectorAll("polygon:not(.selected)").forEach(elm => {
+            if (polygon_line_connect(elm, line)) {
+                polygon_select_connected(elm);
+            }
+        });
+    }
+
+    function polygon_select_connected(polygon) {
+        if (polygon.classList.contains("selected")) {
+            return;
+        }
+        svg.classList.add("dim");
+        polygon.classList.add("selected");
+    }
+
+    function close_equal(a, b) {
+        return (parseFloat(a) - epsilon) <= parseFloat(b) && (parseFloat(a) + epsilon) >= parseFloat(b);
+    }
+
+    function close_less(a, b) {
+        return (parseFloat(a) - epsilon) <= parseFloat(b) || (parseFloat(a) + epsilon) <= parseFloat(b);
+    }
+
+    function close_less_equal(a, b) {
+        return close_equal(a, b) || close_less(a, b);
+    }
+
+    function close_greater(a, b) {
+        return close_less(b, a);
+    }
+
+    function close_greater_equal(a, b) {
+        return close_less_equal(b, a);
+    }
+
+    function point_on_point(x1, y1, x2, y2) {
+        return close_equal(parseFloat(x1), parseFloat(x2)) && close_equal(parseFloat(y1), parseFloat(y2));
+    }
+
+    function point_on_line(a, b, x1, y1, x2, y2) {
+        return (close_equal(parseFloat(b)*(parseFloat(x2)-parseFloat(x1)), parseFloat(a)*(parseFloat(y2)-parseFloat(y1))+parseFloat(y1)*parseFloat(x2)-parseFloat(y2)*parseFloat(x1)) &&
+                close_less_equal(0, (parseFloat(y2)-parseFloat(b))*(parseFloat(b)-parseFloat(y1))) &&
+                close_less_equal(0, (parseFloat(x2)-parseFloat(a))*(parseFloat(a)-parseFloat(x1)))
+        );
+    }
+
+    function point_in_box(a, b, x, y, w, h) {
+        return (close_greater_equal(parseFloat(a), parseFloat(x)) && close_less_equal(parseFloat(a), parseFloat(x)+parseFloat(w)) &&
+                close_greater_equal(parseFloat(b), parseFloat(y)) && close_less_equal(parseFloat(b), parseFloat(y)+parseFloat(h))
+        );
+    }
+
+    function line_line_connect(line1, line2) {
+        for (let i=1; i <= 2; i++) {
+            if (point_on_point(line1.getAttribute(`x${i}`), line1.getAttribute(`y${i}`), line2.getAttribute("x1"), line2.getAttribute("y1")) ||
+                point_on_point(line1.getAttribute(`x${i}`), line1.getAttribute(`y${i}`), line2.getAttribute("x2"), line2.getAttribute("y2"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function entity_line_connect(entity, line) {
+        let rects = entity.querySelectorAll("rect");
+        for (let i=0; i < rects.length; i++) {
+            if (rectangle_line_connect(rects[i], line)) {
+                return true;
+            }
+        }
+        return entity.getAttribute("data-qualified-name").split(".").at(-1).startsWith("l_p_") && label_line_connect(entity, line);
+    }
+
+    function rectangle_line_connect(rectangle, line) {
+        let x = parseFloat(rectangle.getAttribute("x"));
+        let y = parseFloat(rectangle.getAttribute("y"));
+        let w = parseFloat(rectangle.getAttribute("width"));
+        let h = parseFloat(rectangle.getAttribute("height"));
+        for (let i=1; i <= 2; i++) {
+            if (point_on_line(line.getAttribute(`x${i}`), line.getAttribute(`y${i}`), x, y, x+w, y) ||
+                point_on_line(line.getAttribute(`x${i}`), line.getAttribute(`y${i}`), x, y+h, x+w, y+h) ||
+                point_on_line(line.getAttribute(`x${i}`), line.getAttribute(`y${i}`), x, y, x, y+h) ||
+                point_on_line(line.getAttribute(`x${i}`), line.getAttribute(`y${i}`), x+w, y, x+w, y+h)) {
+                return true;
+            }
+        }
+        return false
+    }
+
+    function label_line_connect(label, line) {
+        let x = label.getBBox().x - x_wiggle_room;
+        let y = label.getBBox().y - y_wiggle_room;
+        let w = label.getBBox().width + 2*x_wiggle_room;
+        let h = label.getBBox().height + 2*y_wiggle_room;
+        for (let i=1; i <= 2; i++) {
+            if (point_in_box(line.getAttribute(`x${i}`), line.getAttribute(`y${i}`), x, y, w, h)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function polygon_line_connect(polygon, line) {
+        let q = polygon.points.length;
+        for (let p=0; p<q; p++) {
+            for (let i=1; i <= 2; i++) {
+                if (point_on_line(line.getAttribute(`x${i}`), line.getAttribute(`y${i}`), polygon.points[p].x, polygon.points[p].y, polygon.points[(p+1)%q].x, polygon.points[(p+1)%q].y)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function deselect() {
+        svg.classList.remove("dim");
+        svg.querySelectorAll(".selected:not(line)").forEach(elm => {
+            elm.classList.remove("selected");
+        });
+        svg.querySelectorAll("line.selected").forEach(elm => {
+            elm.classList.remove("selected");
+            elm.style.strokeWidth = elm.getAttribute("originalStrokeWidth");
+            elm.removeAttribute("originalStrokeWidth");
+        });
+    }
+
+    const svg = document.querySelector("svg");
+    const epsilon = 1;
+    const line_width_multiplier = 1.5;
+    const x_wiggle_room = 6;
+    const y_wiggle_room = 6;
+
+    document.addEventListener("DOMContentLoaded", () => {
+        svg.querySelectorAll("g.entity, g > line").forEach(entity => {
+            entity.addEventListener("click", on_click);
+        });
+        svg.addEventListener("keydown", event => {
+            if (event.code === "Escape") {
+                deselect();
+            }
+        });
+    });
+})();
+//]]>
+</script>
+</defs>
