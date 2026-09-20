@@ -1,0 +1,141 @@
+<defs>
+<style type="text/css">
+<![CDATA[
+svg .entity {
+    cursor: pointer;
+}
+svg.dim > g > * {
+    opacity: 0.3;
+}
+svg > g > g.selected,
+svg > g > line.selected {
+    opacity: 1.0;
+}
+]]>
+</style>
+<script>
+//<![CDATA[
+(function () {
+    function on_click() {
+        if (this.classList.contains("selected")) {
+            deselect();
+        } else {
+            deselect();
+            entity_select_connected(this);
+        }
+    }
+
+    function entity_select_connected(entity) {
+        svg.classList.add("dim");
+        entity.classList.add("selected");
+        svg.querySelectorAll("line:not(.selected)").forEach(elm => {
+            if (entity_line_connect(entity, elm)) {
+                line_select_connected(elm);
+            }
+        });
+    }
+
+    function line_select_connected(line) {
+        svg.classList.add("dim");
+        line.classList.add("selected");
+        svg.querySelectorAll("line:not(.selected)").forEach(elm => {
+            if (line_line_connect(elm, line)) {
+                line_select_connected(elm);
+            }
+        });
+        svg.querySelectorAll("g.entity:not(.selected)").forEach(elm => {
+            if (entity_line_connect(elm, line)) {
+                entity_select_connected(elm);
+            }
+        });
+        svg.querySelectorAll("polygon:not(.selected)").forEach(elm => {
+            if (polygon_line_connect(elm, line)) {
+                polygon_select_connected(elm);
+            }
+        });
+    }
+
+    function polygon_select_connected(polygon) {
+        svg.classList.add("dim");
+        polygon.classList.add("selected");
+    }
+
+    function close_equal(a, b) {
+        return (parseFloat(a) - epsilon) <= parseFloat(b) && (parseFloat(a) + epsilon) >= parseFloat(b);
+    }
+
+    function close_less(a, b) {
+        return (parseFloat(a) - epsilon) <= parseFloat(b) || (parseFloat(a) + epsilon) <= parseFloat(b);
+    }
+
+    function close_less_equal(a, b) {
+        return close_equal(a, b) || close_less(a, b);
+    }
+
+    function close_greater(a, b) {
+        return close_less(b, a);
+    }
+
+    function close_greater_equal(a, b) {
+        return close_less_equal(b, a);
+    }
+
+    function line_line_connect(line, line2) {
+        return ((close_equal(line.getAttribute("x1"), line2.getAttribute("x1")) && close_equal(line.getAttribute("y1"), line2.getAttribute("y1"))) ||
+                (close_equal(line.getAttribute("x1"), line2.getAttribute("x2")) && close_equal(line.getAttribute("y1"), line2.getAttribute("y2"))) ||
+                (close_equal(line.getAttribute("x2"), line2.getAttribute("x1")) && close_equal(line.getAttribute("y2"), line2.getAttribute("y1"))) ||
+                (close_equal(line.getAttribute("x2"), line2.getAttribute("x2")) && close_equal(line.getAttribute("y2"), line2.getAttribute("y2")))
+        );
+    }
+
+    function entity_line_connect(entity, line) {
+        let rects = entity.querySelectorAll("rect");
+        for (let i=0; i < rects.length; i++) {
+            if (rectangle_line_connect(rects[i], line)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function rectangle_line_connect(rectangle, line) {
+        return ((close_equal(line.getAttribute("x1"), rectangle.getAttribute("x")) && close_greater_equal(line.getAttribute("y1"), rectangle.getAttribute("y")) && close_less_equal(line.getAttribute("y1"), parseFloat(rectangle.getAttribute("y")) + parseFloat(rectangle.getAttribute("height")))) ||
+                (close_equal(line.getAttribute("x2"), rectangle.getAttribute("x")) && close_greater_equal(line.getAttribute("y2"), rectangle.getAttribute("y")) && close_less_equal(line.getAttribute("y2"), parseFloat(rectangle.getAttribute("y")) + parseFloat(rectangle.getAttribute("height")))) ||
+                (close_equal(line.getAttribute("x1"), parseFloat(rectangle.getAttribute("x")) + parseFloat(rectangle.getAttribute("width"))) && close_greater_equal(line.getAttribute("y1"), rectangle.getAttribute("y")) && close_less_equal(line.getAttribute("y1"), parseFloat(rectangle.getAttribute("y")) + parseFloat(rectangle.getAttribute("height")))) ||
+                (close_equal(line.getAttribute("x2"), parseFloat(rectangle.getAttribute("x")) + parseFloat(rectangle.getAttribute("width"))) && close_greater_equal(line.getAttribute("y2"), rectangle.getAttribute("y")) && close_less_equal(line.getAttribute("y2"), parseFloat(rectangle.getAttribute("y")) + parseFloat(rectangle.getAttribute("height")))) ||
+                (close_equal(line.getAttribute("y1"), rectangle.getAttribute("y")) && close_greater_equal(line.getAttribute("x1"), rectangle.getAttribute("x")) && close_less_equal(line.getAttribute("x1"), parseFloat(rectangle.getAttribute("x")) + parseFloat(rectangle.getAttribute("width")))) ||
+                (close_equal(line.getAttribute("y2"), rectangle.getAttribute("y")) && close_greater_equal(line.getAttribute("x2"), rectangle.getAttribute("x")) && close_less_equal(line.getAttribute("x2"), parseFloat(rectangle.getAttribute("x")) + parseFloat(rectangle.getAttribute("width")))) ||
+                (close_equal(line.getAttribute("y1"), parseFloat(rectangle.getAttribute("y")) + parseFloat(rectangle.getAttribute("height"))) && close_greater_equal(line.getAttribute("x1"), rectangle.getAttribute("x")) && close_less_equal(line.getAttribute("x1"), parseFloat(rectangle.getAttribute("x")) + parseFloat(rectangle.getAttribute("width")))) ||
+                (close_equal(line.getAttribute("y2"), parseFloat(rectangle.getAttribute("y")) + parseFloat(rectangle.getAttribute("height"))) && close_greater_equal(line.getAttribute("x2"), rectangle.getAttribute("x")) && close_less_equal(line.getAttribute("x2"), parseFloat(rectangle.getAttribute("x")) + parseFloat(rectangle.getAttribute("width"))))
+        );
+    }
+
+    function polygon_line_connect(polygon, line) {
+        // If line ends in / on polygon's points xy
+        return false;
+    }
+
+    function deselect() {
+        svg.classList.remove("dim");
+        svg.querySelectorAll(".selected").forEach(entity => {
+            entity.classList.remove("selected");
+        });
+    }
+
+    const svg = document.querySelector("svg");
+    const epsilon = 0.01;
+
+    document.addEventListener("DOMContentLoaded", () => {
+        svg.querySelectorAll("g.entity").forEach(entity => {
+            entity.addEventListener("click", on_click);
+        });
+        svg.addEventListener("keydown", event => {
+            if (event.code === "Escape") {
+                deselect();
+            }
+        });
+    });
+})();
+//]]>
+</script>
+</defs>

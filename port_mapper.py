@@ -1180,7 +1180,6 @@ def make_interactive(svg_file):
     # Add the functions
     svg_puml.getroot().append(svg_function)
 
-
     # Write the svg
     ET.register_namespace("", "http://www.w3.org/2000/svg")
     svg_puml.write(svg_file)
