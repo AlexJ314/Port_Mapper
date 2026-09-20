@@ -97,11 +97,11 @@ Run `port_mapper.py -l <proto1> <proto2...>` to only include the given protocol(
    - Updates every second, needs to be stopped with `CTRL + C`
 ### Get the processes:
  - `Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
-  - **OR**
+    - **OR**
  - `while(1){Get-CimInstance Win32_Process | select ProcessId, Name, CommandLine >> ${Env:COMPUTERNAME}_ps.txt;sleep 1}`
     - Updates every second, needs to be stopped with `CTRL + C`
    - **OR**
  - `Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine > ${Env:COMPUTERNAME}_ps.txt`
-  - **OR**
+    - **OR**
  - `while(1){Get-WmiObject Win32_Process | select ProcessId, Name, CommandLine >> ${Env:COMPUTERNAME}_ps.txt;sleep 1}`
     - Updates every second, needs to be stopped with `CTRL + C`
