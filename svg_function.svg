@@ -188,7 +188,7 @@ svg > g > .selected {
     }
 
     const svg = document.querySelector("svg");
-    const epsilon = 0.01;
+    const epsilon = 1;
     const line_width_multiplier = 1.5;
     const x_wiggle_room = 6;
     const y_wiggle_room = 6;
