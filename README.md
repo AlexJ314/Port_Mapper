@@ -1,7 +1,7 @@
 # Port_Mapper
 Map the ports and processes between servers as an interactive SVG diagram and CSV spreadsheet
 
-![Demo SVG diagram](demo/output.svg?raw=true)
+![Demo SVG diagram](./demo/output.svg?raw=true)
 ##### Note: this image is likely not interactive here due to browser security policies
 
 ---
