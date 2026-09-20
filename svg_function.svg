@@ -35,7 +35,7 @@ svg > g > .selected {
         }
         svg.classList.add("dim");
         entity.classList.add("selected");
-        if (!entity.getAttribute("data-qualified-name").split(".").at("-1").startsWith("cd_") || can_propagate) {
+        if (!entity.getAttribute("data-qualified-name").split(".").at(-1).startsWith("cd_") || can_propagate) {
             svg.querySelectorAll("line:not(.selected)").forEach(elm => {
                 if (entity_line_connect(entity, elm)) {
                     line_select_connected(elm);
@@ -108,6 +108,12 @@ svg > g > .selected {
         );
     }
 
+    function point_in_box(a, b, x, y, w, h) {
+        return (close_greater_equal(parseFloat(a), parseFloat(x)) && close_less_equal(parseFloat(a), parseFloat(x)+parseFloat(w)) &&
+                close_greater_equal(parseFloat(b), parseFloat(y)) && close_less_equal(parseFloat(b), parseFloat(y)+parseFloat(h))
+        );
+    }
+
     function line_line_connect(line1, line2) {
         for (let i=1; i <= 2; i++) {
             if (point_on_point(line1.getAttribute(`x${i}`), line1.getAttribute(`y${i}`), line2.getAttribute("x1"), line2.getAttribute("y1")) ||
@@ -125,7 +131,7 @@ svg > g > .selected {
                 return true;
             }
         }
-        return false;
+        return entity.getAttribute("data-qualified-name").split(".").at(-1).startsWith("l_p_") && label_line_connect(entity, line);
     }
 
     function rectangle_line_connect(rectangle, line) {
@@ -142,6 +148,19 @@ svg > g > .selected {
             }
         }
         return false
+    }
+
+    function label_line_connect(label, line) {
+        let x = label.getBBox().x - x_wiggle_room;
+        let y = label.getBBox().y - y_wiggle_room;
+        let w = label.getBBox().width + 2*x_wiggle_room;
+        let h = label.getBBox().height + 2*y_wiggle_room;
+        for (let i=1; i <= 2; i++) {
+            if (point_in_box(line.getAttribute(`x${i}`), line.getAttribute(`y${i}`), x, y, w, h)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function polygon_line_connect(polygon, line) {
@@ -171,6 +190,8 @@ svg > g > .selected {
     const svg = document.querySelector("svg");
     const epsilon = 0.01;
     const line_width_multiplier = 1.5;
+    const x_wiggle_room = 6;
+    const y_wiggle_room = 6;
 
     document.addEventListener("DOMContentLoaded", () => {
         svg.querySelectorAll("g.entity, g > line").forEach(entity => {
