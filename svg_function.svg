@@ -38,13 +38,13 @@ svg > g > .selected {
         if (!entity.getAttribute("data-qualified-name").split(".").at(-1).startsWith("cd_") || can_propagate) {
             svg.querySelectorAll("line:not(.selected)").forEach(elm => {
                 if (entity_line_connect(entity, elm)) {
-                    line_select_connected(elm);
+                    line_select_connected(elm, 1);
                 }
             });
         }
     }
 
-    function line_select_connected(line) {
+    function line_select_connected(line, total_connections=0) {
         if (line.classList.contains("selected")) {
             return;
         }
@@ -52,21 +52,37 @@ svg > g > .selected {
         line.classList.add("selected");
         line.setAttribute("originalStrokeWidth", line.style.strokeWidth);
         line.style.strokeWidth = `${parseFloat(line.style.strokeWidth)*line_width_multiplier}px`;
-        svg.querySelectorAll("line:not(.selected)").forEach(elm => {
-            if (line_line_connect(elm, line)) {
-                line_select_connected(elm);
+        let elms = svg.querySelectorAll("line:not(.selected), g.entity:not(.selected)");
+        for (let i=0; i<elms.length; i++) {
+            if (elms[i].tagName == "line") {
+                if (line_line_connect(elms[i], line)) {
+                    line_select_connected(elms[i], 1);
+                    total_connections++;
+                    if (total_connections >= 2) {
+                        break;
+                    }
+                }
+            } else {
+                if (entity_line_connect(elms[i], line)) {
+                    entity_select_connected(elms[i], can_propagate=false);
+                    total_connections++;
+                    if (total_connections >= 2) {
+                        break;
+                    }
+                }
             }
-        });
-        svg.querySelectorAll("g.entity:not(.selected)").forEach(elm => {
-            if (entity_line_connect(elm, line)) {
-                entity_select_connected(elm, can_propagate=false);
+        }
+        let polygons = svg.querySelectorAll("polygon:not(.selected)");
+        let polygon_connections = 0;
+        for (let i=0; i<polygons.length; i++) {
+            if (polygon_line_connect(polygons[i], line)) {
+                polygon_select_connected(polygons[i]);
+                polygon_connections++;
+                if (polygon_connections >= 2) {
+                    break;
+                }
             }
-        });
-        svg.querySelectorAll("polygon:not(.selected)").forEach(elm => {
-            if (polygon_line_connect(elm, line)) {
-                polygon_select_connected(elm);
-            }
-        });
+        }
     }
 
     function polygon_select_connected(polygon) {
