@@ -4,8 +4,6 @@ scale 0.5
 skinparam linetype ortho
 skinparam roundCorner 7
 !pragma layout elk
-'!pragma svginteractive true
-'skinparam pathHoverColor #yellow
 <style>
     process {
         LineColor "#FFF"
@@ -167,32 +165,32 @@ l_p_serverC_443_udp <-[dashed,#blue]- p_serverC_443_udp
 l_p_100U002E000U002E000U002E4_700_tcp -[#blue,#red]- p_100U002E000U002E000U002E4_700_tcp
 l_p_100U002E000U002E000U002E4_701_udp -[dashed,#blue]- p_100U002E000U002E000U002E4_701_udp
 l_p_100U002E000U002E000U002E5_800_tcp6 -[dotted,norank,#blue]- p_100U002E000U002E000U002E5_800_tcp6
-p_serverA_80_udp -[norank,dotted,norank,#blue]- p_serverC_50000_udp
-p_serverA_443_udp -[norank,dashed,#blue]- p_serverB_40000_udp
-cd_serverA_process4_andU0020manyU0020connectionsU0021 <-[dashed,#blue]- l_p_serverA_443_udp
-p_serverA_53_tcp -[norank,#blue,#red]- p_100U002E000U002E000U002E4_700_tcp
 cd_serverB_processtwo_U002DU002DsomeU005FargU0020here <-[dashed,#blue]- l_p_serverB_3000_udp6
-p_serverA_8080_tcp -[norank,#blue]- p_serverC_600_tcp
-p_serverA_20_tcp -[norank]- p_serverA_10_tcp
 p_serverA_300_tcp6 -[norank,#blue]- p_serverB_200_tcp6
-p_serverB_53_udp -[norank,dashed,#blue]- p_100U002E000U002E000U002E4_701_udp
-cd_serverB_process1_iU0020amU0020process1 <-[#blue]- l_p_serverB_200_tcp6
-cd_serverA_process4_andU0020manyU0020connectionsU0021 <-[dotted,norank,#blue]- l_p_serverA_30001_tcp6
-cd_serverB_processtwo_U002DU002DsomeU005FargU0020here <-[dashed,#blue]- l_p_serverB_53_udp
+cd_serverC_insecure_iU0020amU0020insecure <-[#blue]- l_p_serverC_600_tcp
+p_serverA_443_udp -[norank,dashed,#blue]- p_serverB_40000_udp
 p_serverB_55555_udp -[norank,dashed,#blue]- p_serverC_443_udp
-cd_serverC_secure_iU0020amU0020secure <-[dashed,#blue]- l_p_serverC_443_udp
-cd_serverA_process3_ <-- l_p_serverA_10_tcp
 cd_serverA_process3_ <-- l_p_serverA_20_tcp
+cd_serverA_process4_4U0020hasU0020threeU0020processes <-[dotted,norank,#blue]- l_p_serverA_80_udp
+cd_serverA_process4_3U0020hasU0020noU0020args <-[#blue]- l_p_serverA_300_tcp6
+p_serverA_80_udp -[norank,dotted,norank,#blue]- p_serverC_50000_udp
+cd_serverA_process4_andU0020manyU0020connectionsU0021 <-[dashed,#blue]- l_p_serverA_443_udp
+cd_serverB_processc_ -[dashed,#blue]-> l_p_serverB_40000_udp
 cd_serverA_process4_andU0020manyU0020connectionsU0021 <-[#blue]- l_p_serverA_8080_tcp
 cd_serverC_insecure_iU0020amU0020insecure -[dotted,norank,#blue]-> l_p_serverC_50000_udp
-cd_serverA_process1_iU0020amU0020process1 <-[#green]- l_p_serverA_1_tcp
-cd_serverA_process4_3U0020hasU0020noU0020args <-[#blue]- l_p_serverA_300_tcp6
 p_serverA_30001_tcp6 -[norank,dotted,norank,#blue]- p_100U002E000U002E000U002E5_800_tcp6
-cd_serverB_processc_ -[dashed,#blue]-> l_p_serverB_40000_udp
+p_serverA_8080_tcp -[norank,#blue]- p_serverC_600_tcp
+cd_serverA_process1_iU0020amU0020process1 <-[#green]- l_p_serverA_1_tcp
+cd_serverA_process3_ <-- l_p_serverA_10_tcp
+p_serverB_53_udp -[norank,dashed,#blue]- p_100U002E000U002E000U002E4_701_udp
 cd_serverA_process4_andU0020manyU0020connectionsU0021 <-[#blue,#red]- l_p_serverA_53_tcp
-cd_serverA_process4_4U0020hasU0020threeU0020processes <-[dotted,norank,#blue]- l_p_serverA_80_udp
-p_serverA_40001_udp6 -[norank,dashed,#blue]- p_serverB_3000_udp6
+p_serverA_53_tcp -[norank,#blue,#red]- p_100U002E000U002E000U002E4_700_tcp
 cd_serverB_processc_ -[dashed,#blue]-> l_p_serverB_55555_udp
-cd_serverC_insecure_iU0020amU0020insecure <-[#blue]- l_p_serverC_600_tcp
+p_serverA_40001_udp6 -[norank,dashed,#blue]- p_serverB_3000_udp6
+cd_serverB_processtwo_U002DU002DsomeU005FargU0020here <-[dashed,#blue]- l_p_serverB_53_udp
 cd_serverA_process4_3U0020hasU0020noU0020args -[dashed,#blue]-> l_p_serverA_40001_udp6
+cd_serverA_process4_andU0020manyU0020connectionsU0021 <-[dotted,norank,#blue]- l_p_serverA_30001_tcp6
+cd_serverC_secure_iU0020amU0020secure <-[dashed,#blue]- l_p_serverC_443_udp
+cd_serverB_process1_iU0020amU0020process1 <-[#blue]- l_p_serverB_200_tcp6
+p_serverA_20_tcp -[norank]- p_serverA_10_tcp
 @enduml
