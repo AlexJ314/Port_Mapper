@@ -1,7 +1,8 @@
 <defs>
 <style type="text/css">
 <![CDATA[
-svg .entity {
+svg g.entity,
+svg g > line {
     cursor: pointer;
 }
 svg.dim > g > * {
@@ -20,21 +21,33 @@ svg > g > .selected {
             deselect();
         } else {
             deselect();
-            entity_select_connected(this);
+            if (this.classList.contains("entity")) {
+                entity_select_connected(this);
+            } else if (this.tagName == "line") {
+                line_select_connected(this);
+            }
         }
     }
 
-    function entity_select_connected(entity) {
+    function entity_select_connected(entity, can_propagate=true) {
+        if (entity.classList.contains("selected")) {
+            return;
+        }
         svg.classList.add("dim");
         entity.classList.add("selected");
-        svg.querySelectorAll("line:not(.selected)").forEach(elm => {
-            if (entity_line_connect(entity, elm)) {
-                line_select_connected(elm);
-            }
-        });
+        if (!entity.getAttribute("data-qualified-name").split(".").at("-1").startsWith("cd_") || can_propagate) {
+            svg.querySelectorAll("line:not(.selected)").forEach(elm => {
+                if (entity_line_connect(entity, elm)) {
+                    line_select_connected(elm);
+                }
+            });
+        }
     }
 
     function line_select_connected(line) {
+        if (line.classList.contains("selected")) {
+            return;
+        }
         svg.classList.add("dim");
         line.classList.add("selected");
         line.setAttribute("originalStrokeWidth", line.style.strokeWidth);
@@ -46,7 +59,7 @@ svg > g > .selected {
         });
         svg.querySelectorAll("g.entity:not(.selected)").forEach(elm => {
             if (entity_line_connect(elm, line)) {
-                entity_select_connected(elm);
+                entity_select_connected(elm, can_propagate=false);
             }
         });
         svg.querySelectorAll("polygon:not(.selected)").forEach(elm => {
@@ -57,6 +70,9 @@ svg > g > .selected {
     }
 
     function polygon_select_connected(polygon) {
+        if (polygon.classList.contains("selected")) {
+            return;
+        }
         svg.classList.add("dim");
         polygon.classList.add("selected");
     }
@@ -154,10 +170,10 @@ svg > g > .selected {
 
     const svg = document.querySelector("svg");
     const epsilon = 0.01;
-    const line_width_multiplier = 1.2;
+    const line_width_multiplier = 1.5;
 
     document.addEventListener("DOMContentLoaded", () => {
-        svg.querySelectorAll("g.entity").forEach(entity => {
+        svg.querySelectorAll("g.entity, g > line").forEach(entity => {
             entity.addEventListener("click", on_click);
         });
         svg.addEventListener("keydown", event => {
