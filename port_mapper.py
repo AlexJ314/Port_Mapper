@@ -1029,10 +1029,12 @@ def orient_connection(conn):
                             procs = [""]
                             args = [""]
                     for (proc, arg) in zip(procs, args):
+                        proc = proc.split("?")[0]
                         if len(rprocs) == 0:
                             rprocs = [""]
                             rargs = [""]
                         for (rproc, rarg) in zip(rprocs, rargs):
+                            rproc = rproc.split("?")[0]
                             row = [conn.get("PROTO"), conn.get("STATE"), lh, proc, arg, lp, rh, rproc, rarg, rp,]
                             csv_writer.writerow(row)
 
@@ -1138,6 +1140,7 @@ def dump_csv():
         csv_writer = csv.writer(fout, quoting=csv.QUOTE_MINIMAL)
         for (hostname, server) in SERVER_MAP.items():
             for (proc, args) in server.items():
+                proc = proc.split("?")[0]
                 for (arg, connections) in args.items():
                     if len(connections) == 0:
                         csv_writer.writerow(["", "", hostname, proc, arg, "", "", "", "", ""])
