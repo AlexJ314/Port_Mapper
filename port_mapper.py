@@ -604,6 +604,7 @@ def map_servers():
 
     # All netstat entries update their processes with connection info
     for (hostname, server) in SERVER.items():
+        print(hostname)
         for (pp, details) in server.get("NETSTAT").items():
             for detail in details:
                 pid = detail.setdefault("PID", "-1")
@@ -668,6 +669,7 @@ def map_servers():
     #   Instead of server > pid > connections
     for (hostname, server) in SERVER.items():
         s_host = SERVER_MAP.setdefault(hostname, {})
+        print(hostname)
         for (pid, detail) in server.get("PS").items():
             proc = detail.get("PROCESS")
             args = detail.get("ARGS")
