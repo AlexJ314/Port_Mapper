@@ -32,8 +32,8 @@ Run `port_mapper.py -k` to keep unique ephemeral ports in the diagram instead of
 
 Run `port_mapper.py -v` to generate a static svg instead of an interactive one
 
-Run `port_mapper.py -g` to prevent different arguments to the same process being grouped under one process
- - Useful if the diagram becomes unreadable when a few processes run dozens of times with different arguments
+Run `port_mapper.py -g` to group different arguments to the same process under one process
+ - Disabled by default because the diagram becomes unreadable when a few processes run dozens of times with different arguments
 
 Run `port_mapper.py -d <path/to/known_hosts_file>` to choose the known hosts file
  - This file will act as the DNS resolver for unknown hosts
