@@ -62,8 +62,12 @@ Run `port_mapper.py -l <proto1> <proto2...>` to only include the given protocol(
 
 ## Linux:
 ### Get the ports:
+ - `sudo ss -pianO > ${HOSTNAME}_netstat.txt`
+   - **OR**
  - `sudo netstat -pan > ${HOSTNAME}_netstat.txt`
    - **OR**
+ - `while sleep 1; do sudo ss -pianO > ${HOSTNAME}_netstat.txt; done`
+   - Updates every second, needs to be stopped with `CTRL + C`
  - `sudo netstat -panc > ${HOSTNAME}_netstat.txt`
    - Updates every second, needs to be stopped with `CTRL + C`
 ### Get the processes:

@@ -1,6 +1,8 @@
 """ port_mapper.py - Map the ports and processes between servers """
 # Linux:
 #   Get ports:
+#     sudo ss -pianO > ${HOSTNAME}_netstat.txt
+#       OR
 #     sudo netstat -pan > ${HOSTNAME}_netstat.txt
 #       OR
 #     sudo netstat -panc > ${HOSTNAME}_netstat.txt
@@ -151,6 +153,35 @@ def setup(args):
                                            r"(.*)"                                      # Timer
                                           , re.IGNORECASE),
             },
+            "LINUX_NETSTAT_SOCKETS" : {
+                "HEADER" : re.compile(r"Proto\s+RefCnt\s+Flags\s+Type\s+State\s+I-Node\s+PID/Program name\s+Path", re.IGNORECASE),
+                "PARSER" : parse_linux_netstat_sockets,
+                "FULL_MATCH" : re.compile(r"([a-z\d_]+)\s+"                             # Proto
+                                          r"([\d]+)\s+"                                 # RefCnt
+                                          r"\[([\sa-z\d_]+)\]\s+"                       # Flags
+                                          r"([a-z\d_]+)\s+"                             # Type
+                                          r"([a-z\d_])\s+"                              # State
+                                          r"(\d+)\s+"                                   # I-Node
+                                          r"([\d]*)\/?-?((?:.(?!\s{2,}))*[^\s])\s*"     # PID/Program name
+                                          r"(.*)"                                       # Path
+                                          , re.IGNORECASE),
+            },
+            "LINUX_SS" : {
+                "HEADER" : re.compile(r"Netid\s+State\s+Recv-Q\s+Send-Q\s+Local Address:Port\s+Peer Address:Port\s+Process", re.IGNORECASE),
+                "PARSER" : parse_linux_ss,
+                r"\[([\sa-z\d_]+)\]\s+"
+                r"([a-z\d_]+)\s+"
+                "FULL_MATCH" : re.compile(r"([a-z\d_]+)\s+"                             # Netid
+                                          r"([a-z\d_]+)\s+"                             # State   
+                                          r"([\d]+)\s+"                                 # Recv-Q
+                                          r"([\d]+)\s+"                                 # Send-Q
+                                          r"(.*?)"                                      # Local Address
+                                          r"\s?:?([-\d\*]+)\s*"                         # Port
+                                          r"(.*?)"                                      # Peer Address
+                                          r"\s?:?([-\d\*]+)\s*"                         # Port
+                                          r"(.*)"                                       # Process
+                                          , re.IGNORECASE),
+            },
             "WINDOWS_GP" : {
                 "HEADER" : re.compile(r"ProcessId\s+(Name\s+)CommandLine", re.IGNORECASE),
                 "PARSER" : parse_windows_gp,
@@ -256,6 +287,18 @@ def closed_states():
     return ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing",)
 
 
+def in_states():
+    ''' What to consider in states '''
+
+    return ("listening", "listen", "syn_received", "syn_recv",)
+
+
+def out_states():
+    ''' What to consider out states '''
+
+    return ("syn_send", "syn_sent",)
+
+
 def shared_ps(value, host):
     ''' Process parsing shared between types '''
 
@@ -320,9 +363,9 @@ def shared_netstat(value, host):
         # Don't bother if the port isn't set up
         return False
 
-    if state in ("listening", "listen", "syn_received", "syn_recv") or remote_port in ("*", "0", "") or not is_ephemeral(local_port):
+    if state in in_states() or remote_port in ("*", "0", "") or not is_ephemeral(local_port):
         port_type += "_portin"
-    if state in ("syn_send", "syn_sent") or is_ephemeral(local_port):
+    if state in out_states() or is_ephemeral(local_port):
         port_type += "_portout"
     value.update({"PORT_TYPE" : port_type})
 
@@ -440,6 +483,25 @@ def parse_linux_netstat(host, line, header_match):
     }
 
     shared_netstat(new_val, host)
+
+    return matched
+
+def parse_linux_netstat_sockets(host, line, header_match):
+    ''' Match the socket part of a Linux netstat output '''
+
+    matched = MATCHER.get("TYPE").get("LINUX_NETSTAT_SOCKETS").get("FULL_MATCH").match(line)
+    if matched is None:
+        return None
+
+    return matched
+
+
+def parse_linux_ss(host, line, header_match):
+    ''' Match a Linux ss output '''
+
+    matched = MATCHER.get("TYPE").get("LINUX_SS").get("FULL_MATCH").match(line)
+    if matched is None:
+        return None
 
     return matched
 
