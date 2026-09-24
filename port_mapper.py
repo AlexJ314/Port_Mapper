@@ -5,6 +5,8 @@
 #       OR
 #     sudo netstat -pan > ${HOSTNAME}_netstat.txt
 #       OR
+#     while sleep 1; do sudo ss -pianO > ${HOSTNAME}_netstat.txt; done
+#       OR
 #     sudo netstat -panc > ${HOSTNAME}_netstat.txt
 #
 #   Get processes:
