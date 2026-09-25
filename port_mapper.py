@@ -121,7 +121,7 @@ def setup(args):
         "LOCAL_IP" : re.compile(r"(\[*(?:(?:0+\.*\:*)+|"
                                r"(?:f+\.*\:*)+|"
                                r"(?:[\:\.0]+)1?|"
-                               r"(?:127\.0+\.0+\.1)"
+                               r"(?:127\.\d+\.\d+\.\d+)"
                                r")\]*)", re.IGNORECASE),
         "IPV6" : re.compile(r"([^\.*]+)", re.IGNORECASE),
         "TYPE" : {
