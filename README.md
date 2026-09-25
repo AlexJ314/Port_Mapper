@@ -2,7 +2,7 @@
 Map the ports and processes between servers as an interactive SVG diagram and CSV spreadsheet
 
 ![Demo SVG diagram](demo/output.svg)
-##### Note: this image is likely not interactive here due to browser security policies
+##### Note: This image is likely not interactive here due to browser security policies
 
 ---
 
@@ -68,6 +68,7 @@ Run `port_mapper.py -l <proto1> <proto2...>` to only include the given protocol(
    - **OR**
  - `while sleep 1; do sudo ss -pianO > ${HOSTNAME}_netstat.txt; done`
    - Updates every second, needs to be stopped with `CTRL + C`
+   - **OR**
  - `sudo netstat -panc > ${HOSTNAME}_netstat.txt`
    - Updates every second, needs to be stopped with `CTRL + C`
 ### Get the processes:
