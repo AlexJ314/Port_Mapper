@@ -160,9 +160,9 @@ def setup(args):
                 "PARSER" : parse_linux_netstat_sockets,
                 "FULL_MATCH" : re.compile(r"([a-z\d_]+)\s+"                             # Proto
                                           r"([\d]+)\s+"                                 # RefCnt
-                                          r"\[([\sa-z\d_]+)\]\s+"                       # Flags
+                                          r"\[\s*([\sa-z\d_]+)\s*\]\s+"                 # Flags
                                           r"([a-z\d_]+)\s+"                             # Type
-                                          r"([a-z\d_])\s+"                              # State
+                                          r"([a-z\d_]*)\s+"                             # State
                                           r"(\d+)\s+"                                   # I-Node
                                           r"([\d]*)\/?-?((?:.(?!\s{2,}))*[^\s])\s*"     # PID/Program name
                                           r"(.*)"                                       # Path
@@ -301,6 +301,17 @@ def out_states():
     return ("syn_send", "syn_sent",)
 
 
+def lowercase(val):
+    ''' Safe lowercase '''
+
+    try:
+        return val.lower()
+    except AttributeError:
+        pass
+
+    return val
+
+
 def shared_ps(value, host):
     ''' Process parsing shared between types '''
 
@@ -423,14 +434,14 @@ def parse_linux_ps(host, line, header_match):
     if matched is None:
         return None
 
-    uid = matched.group(1).lower()
-    pid = matched.group(2).lower()
-    ppid = matched.group(3).lower()
-    c = matched.group(4).lower()
-    stime = matched.group(5).lower()
-    tty = matched.group(6).lower()
-    time = matched.group(7).lower()
-    args = shlex.split(matched.group(8).lower(), posix=False)
+    uid = lowercase(matched.group(1))
+    pid = lowercase(matched.group(2))
+    ppid = lowercase(matched.group(3))
+    c = lowercase(matched.group(4))
+    stime = lowercase(matched.group(5))
+    tty = lowercase(matched.group(6))
+    time = lowercase(matched.group(7))
+    args = shlex.split(matched.group(8), posix=False)
     process = args[0]
     args = shlex.join(args[1:])
 
@@ -458,17 +469,17 @@ def parse_linux_netstat(host, line, header_match):
     if matched is None:
         return None
 
-    proto = matched.group(1).lower()
-    recv_q = matched.group(2).lower()
-    send_q = matched.group(3).lower()
-    local_host = matched.group(4).lower()
-    local_port = matched.group(5).lower()
-    remote_host = matched.group(6).lower()
-    remote_port = matched.group(7).lower()
-    state = matched.group(8).lower()
-    pid = matched.group(9).lower()
-    process = matched.group(10).lower()
-    timer = matched.group(11).lower()
+    proto = lowercase(matched.group(1))
+    recv_q = lowercase(matched.group(2))
+    send_q = lowercase(matched.group(3))
+    local_host = lowercase(matched.group(4))
+    local_port = lowercase(matched.group(5))
+    remote_host = lowercase(matched.group(6))
+    remote_port = lowercase(matched.group(7))
+    state = lowercase(matched.group(8))
+    pid = lowercase(matched.group(9))
+    process = matched.group(10)
+    timer = lowercase(matched.group(11))
 
     new_val = {
         "PROTO" : proto,
@@ -495,6 +506,8 @@ def parse_linux_netstat_sockets(host, line, header_match):
     if matched is None:
         return None
 
+    # Skip interfaces for now
+
     return matched
 
 
@@ -505,14 +518,14 @@ def parse_linux_ss(host, line, header_match):
     if matched is None:
         return None
 
-    proto = matched.group(1)
-    state = matched.group(2)
-    recv_q = matched.group(3)
-    send_q = matched.group(4)
-    local_host = matched.group(5)
-    local_port = matched.group(6)
-    remote_host = matched.group(7)
-    remote_port = matched.group(8)
+    proto = lowercase(matched.group(1))
+    state = lowercase(matched.group(2))
+    recv_q = lowercase(matched.group(3))
+    send_q = lowercase(matched.group(4))
+    local_host = lowercase(matched.group(5))
+    local_port = lowercase(matched.group(6))
+    remote_host = lowercase(matched.group(7))
+    remote_port = lowercase(matched.group(8))
     proc = matched.group(9)
 
     pids = []
@@ -561,8 +574,8 @@ def parse_windows_gp(host, line, header_match):
     if matched is None:
         return None
 
-    pid = matched.group(1).lower()
-    args = matched.group(2).lower()
+    pid = lowercase(matched.group(1))
+    args = matched.group(2)
     process = args[0:len(header_match.group(1))].strip()
     args = args[len(header_match.group(1)):]
 
@@ -584,11 +597,11 @@ def parse_windows_ps(host, line, header_match):
     if matched is None:
         return None
 
-    uid = matched.group(1).lower()
-    pid = matched.group(2).lower()
-    ppid = matched.group(3).lower()
-    stime = matched.group(4).lower()
-    args = shlex.split(matched.group(5).lower(), posix=False)
+    uid = lowercase(matched.group(1))
+    pid = lowercase(matched.group(2))
+    ppid = lowercase(matched.group(3))
+    stime = lowercase(matched.group(4))
+    args = shlex.split(matched.group(5), posix=False)
     process = args[0]
     args = shlex.join(args[1:])
 
@@ -613,13 +626,13 @@ def parse_windows_netstat(host, line, header_match):
     if matched is None:
         return None
 
-    proto = matched.group(1).lower()
-    local_host = matched.group(2).lower()
-    local_port = matched.group(3).lower()
-    remote_host = matched.group(4).lower()
-    remote_port = matched.group(5).lower()
-    state = matched.group(6).lower()
-    pid = matched.group(7).lower()
+    proto = lowercase(matched.group(1))
+    local_host = lowercase(matched.group(2))
+    local_port = lowercase(matched.group(3))
+    remote_host = lowercase(matched.group(4))
+    remote_port = lowercase(matched.group(5))
+    state = lowercase(matched.group(6))
+    pid = lowercase(matched.group(7))
 
     new_val = {
         "PROTO" : proto,
