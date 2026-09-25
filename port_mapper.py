@@ -389,9 +389,13 @@ def parse_linux_ps(host, line, header_match):
     stime = matched.group(5).lower()
     tty = matched.group(6).lower()
     time = matched.group(7).lower()
-    args = shlex.split(matched.group(8).lower(), posix=False)
-    process = args[0]
-    args = shlex.join(args[1:])
+    try:
+        args = shlex.split(matched.group(8), posix=False)
+        process = args[0]
+        args = shlex.join(args[1:])
+    except ValueError:
+        process = matched.group(8)
+        args = ""
 
     new_val = {
         "UID" : uid,
@@ -426,7 +430,7 @@ def parse_linux_netstat(host, line, header_match):
     remote_port = matched.group(7).lower()
     state = matched.group(8).lower()
     pid = matched.group(9).lower()
-    process = matched.group(10).lower()
+    process = matched.group(10)
     timer = matched.group(11).lower()
 
     new_val = {
@@ -456,7 +460,7 @@ def parse_windows_gp(host, line, header_match):
         return None
 
     pid = matched.group(1).lower()
-    args = matched.group(2).lower()
+    args = matched.group(2)
     process = args[0:len(header_match.group(1))].strip()
     args = args[len(header_match.group(1)):]
 
@@ -482,9 +486,13 @@ def parse_windows_ps(host, line, header_match):
     pid = matched.group(2).lower()
     ppid = matched.group(3).lower()
     stime = matched.group(4).lower()
-    args = shlex.split(matched.group(5).lower(), posix=False)
-    process = args[0]
-    args = shlex.join(args[1:])
+    try:
+        args = shlex.split(matched.group(5), posix=False)
+        process = args[0]
+        args = shlex.join(args[1:])
+    except ValueError:
+        process = matched.group(5)
+        args = ""
 
     new_val = {
         "UID" : uid,
