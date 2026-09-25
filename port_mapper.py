@@ -146,8 +146,8 @@ def setup(args):
                 "HEADER" : re.compile(r"Proto\s+Recv-Q\s+Send-Q\s+Local Address\s+Foreign Address\s+State\s+PID/Program name\s*(?:Timer)?", re.IGNORECASE),
                 "PARSER" : parse_linux_netstat,
                 "FULL_MATCH" : re.compile(r"([a-z\d]+)\s+"                              # Proto
-                                           r"([\d]+)\s+"                                # Recv-Q
-                                           r"([\d]+)\s+"                                # Send-Q
+                                           r"([-\d]+)\s+"                               # Recv-Q
+                                           r"([-\d]+)\s+"                               # Send-Q
                                            r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"      # Local host:Port
                                            r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"      # Remote host:Port
                                            r"([a-z\d_]*)\s+"                            # State
@@ -171,18 +171,17 @@ def setup(args):
             "LINUX_SS" : {
                 "HEADER" : re.compile(r"Netid\s+State\s+Recv-Q\s+Send-Q\s+Local Address:Port\s+Peer Address:Port\s+Process", re.IGNORECASE),
                 "PARSER" : parse_linux_ss,
-                r"\[([\sa-z\d_]+)\]\s+"
-                r"([a-z\d_]+)\s+"
-                "FULL_MATCH" : re.compile(r"([a-z\d_]+)\s+"                             # Netid
-                                          r"([a-z\d_]+)\s+"                             # State   
-                                          r"([\d]+)\s+"                                 # Recv-Q
-                                          r"([\d]+)\s+"                                 # Send-Q
-                                          r"(.*?)"                                      # Local Address
-                                          r"\s?:?([-\d\*]+)\s*"                         # Port
-                                          r"(.*?)"                                      # Peer Address
-                                          r"\s?:?([-\d\*]+)\s*"                         # Port
+                "FULL_MATCH" : re.compile(r"([a-z\d_\?]+)\s+"                           # Netid
+                                          r"([-a-z\d_]+)\s+"                            # State   
+                                          r"([-\d]+)\s+"                                # Recv-Q
+                                          r"([-\d]+)\s+"                                # Send-Q
+                                          r"\[?([-\._\d/a-z\*\:]+)\]?"                  # Local Address
+                                          r"\s?\:?(\*?-?\d*)\s*"                        # Port
+                                          r"\[?([-\._\d/a-z\*\:]+)\]?"                  # Peer Address
+                                          r"\s?:?(\*?-?\d*)\s*"                         # Port
                                           r"(.*)"                                       # Process
                                           , re.IGNORECASE),
+                "PID_MATCH" : re.compile(r"pid=(\d+)", re.IGNORECASE),
             },
             "WINDOWS_GP" : {
                 "HEADER" : re.compile(r"ProcessId\s+(Name\s+)CommandLine", re.IGNORECASE),
@@ -286,7 +285,7 @@ def guess_type(line):
 def closed_states():
     ''' What to consider closed states '''
 
-    return ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing",)
+    return ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","unconn","closing",)
 
 
 def in_states():
@@ -365,18 +364,18 @@ def shared_netstat(value, host):
         # Don't bother if the port isn't set up
         return False
 
-    if state in in_states() or remote_port in ("*", "0", "") or not is_ephemeral(local_port):
-        port_type += "_portin"
-    if state in out_states() or is_ephemeral(local_port):
-        port_type += "_portout"
-    value.update({"PORT_TYPE" : port_type})
-
     if local_port in ("*", ""):
         local_port = "0"
         value.update({"LOCAL_PORT" : local_port})
     if remote_port in ("*", ""):
         remote_port = "0"
         value.update({"REMOTE_PORT" : remote_port})
+
+    if state in in_states() or remote_port in ("*", "0", "") or not is_ephemeral(local_port):
+        port_type += "_portin"
+    if state in out_states() or is_ephemeral(local_port):
+        port_type += "_portout"
+    value.update({"PORT_TYPE" : port_type})
 
     if remote_host == "*":
         remote_host = ""
@@ -504,6 +503,52 @@ def parse_linux_ss(host, line, header_match):
     matched = MATCHER.get("TYPE").get("LINUX_SS").get("FULL_MATCH").match(line)
     if matched is None:
         return None
+
+    proto = matched.group(1)
+    state = matched.group(2)
+    recv_q = matched.group(3)
+    send_q = matched.group(4)
+    local_host = matched.group(5)
+    local_port = matched.group(6)
+    remote_host = matched.group(7)
+    remote_port = matched.group(8)
+    proc = matched.group(9)
+
+    pids = []
+    if proc is not None:
+        pids = MATCHER.get("TYPE").get("LINUX_SS").get("PID_MATCH").findall(matched.group(9))
+
+    # Skip interfaces for now
+    if proto in ("nl","u_str","v_str","u_seq","u_dgr",):
+        return matched
+
+    if len(pids) == 0:
+        new_val = {
+            "PROTO" : proto,
+            "RECV_Q" : recv_q,
+            "SEND_Q" : send_q,
+            "LOCAL_HOST" : local_host,
+            "LOCAL_PORT" : local_port,
+            "REMOTE_HOST" : remote_host,
+            "REMOTE_PORT" : remote_port,
+            "STATE" : state,
+            "PID" : "",
+        }
+        shared_netstat(new_val, host)
+    else:
+        for pid in pids:
+            new_val = {
+                "PROTO" : proto,
+                "RECV_Q" : recv_q,
+                "SEND_Q" : send_q,
+                "LOCAL_HOST" : local_host,
+                "LOCAL_PORT" : local_port,
+                "REMOTE_HOST" : remote_host,
+                "REMOTE_PORT" : remote_port,
+                "STATE" : state,
+                "PID" : pid,
+            }
+            shared_netstat(new_val, host)
 
     return matched
 
