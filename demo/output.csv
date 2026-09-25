@@ -1,13 +1,13 @@
 Protocol,State,Source Host,Source Process,Source Args,Source Port,Destination Host,Destination Process,Destination Args,Destination Port
 tcp,,serverA,process3,,10,serverA,process3,,20
-tcp,,serverC,insecure,i am insecure,600,serverA,process4,and many connections!,8080
-tcp,bound,serverA,process4,and many connections!,53,100.000.000.4,,,700
-tcp,listen,serverA,process1,i am process1,1,serverA,,,0
-tcp6,closed,100.000.000.5,,,800,serverA,process4,and many connections!,30001
-tcp6,established,serverB,process1,i am process1,200,serverA,process4,3 has no args,300
-udp,,serverA,process4,and many connections!,443,serverB,processc,,40000
-udp,,serverB,processtwo,--some_arg here,53,100.000.000.4,,,701
-udp,closed,serverA,process4,4 has three processes,80,serverC,insecure,i am insecure,50000
-udp,established,serverC,secure,i am secure,443,serverB,processc,,55555
-udp6,,serverB,processtwo,--some_arg here,3000,serverA,process4,3 has no args,40001
-,,serverA,process2,i have no connections,,,,,
+tcp,,serverC,insecure,I am insecure,600,serverA,process4,And many connections!,8080
+tcp,bound,serverA,process4,And many connections!,53,100.000.000.4,,,700
+tcp,listen,serverA,process1,I am process1,1,serverA,,,0
+tcp6,closed,100.000.000.5,,,800,serverA,process4,And many connections!,30001
+tcp6,established,serverB,process1,I am process1,200,serverA,process4,3 has no args,300
+udp,,serverA,process4,And many connections!,443,serverB,processC,,40000
+udp,,serverB,processTwo,--some_arg here,53,100.000.000.4,,,701
+udp,closed,serverA,process4,4 has three processes,80,serverC,insecure,I am insecure,50000
+udp,established,serverC,secure,I am secure,443,serverB,processC,,55555
+udp6,,serverB,processTwo,--some_arg here,3000,serverA,process4,3 has no args,40001
+,,serverA,process2,I have no connections,,,,,
