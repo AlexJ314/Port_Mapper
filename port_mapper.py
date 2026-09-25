@@ -1,7 +1,11 @@
 """ port_mapper.py - Map the ports and processes between servers """
 # Linux:
 #   Get ports:
+#     sudo ss -pianO > ${HOSTNAME}_netstat.txt
+#       OR
 #     sudo netstat -pan > ${HOSTNAME}_netstat.txt
+#       OR
+#     while sleep 1; do sudo ss -pianO > ${HOSTNAME}_netstat.txt; done
 #       OR
 #     sudo netstat -panc > ${HOSTNAME}_netstat.txt
 #
@@ -142,14 +146,42 @@ def setup(args):
                 "HEADER" : re.compile(r"Proto\s+Recv-Q\s+Send-Q\s+Local Address\s+Foreign Address\s+State\s+PID/Program name\s*(?:Timer)?", re.IGNORECASE),
                 "PARSER" : parse_linux_netstat,
                 "FULL_MATCH" : re.compile(r"([a-z\d]+)\s+"                              # Proto
-                                           r"([\d]+)\s+"                                # Recv-Q
-                                           r"([\d]+)\s+"                                # Send-Q
+                                           r"([-\d]+)\s+"                               # Recv-Q
+                                           r"([-\d]+)\s+"                               # Send-Q
                                            r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"      # Local host:Port
                                            r"([a-f\d\.\[\]\:\*\%]+)\:([\d\*]+)\s+"      # Remote host:Port
                                            r"([a-z\d_]*)\s+"                            # State
                                            r"([\d]*)\/?-?((?:.(?!\s{2,}))*[^\s])\s*"    # PID/Process
                                            r"(.*)"                                      # Timer
                                           , re.IGNORECASE),
+            },
+            "LINUX_NETSTAT_SOCKETS" : {
+                "HEADER" : re.compile(r"Proto\s+RefCnt\s+Flags\s+Type\s+State\s+I-Node\s+PID/Program name\s+Path", re.IGNORECASE),
+                "PARSER" : parse_linux_netstat_sockets,
+                "FULL_MATCH" : re.compile(r"([a-z\d_]+)\s+"                             # Proto
+                                          r"([\d]+)\s+"                                 # RefCnt
+                                          r"\[\s*([\sa-z\d_]+)\s*\]\s+"                 # Flags
+                                          r"([a-z\d_]+)\s+"                             # Type
+                                          r"([a-z\d_]*)\s+"                             # State
+                                          r"(\d+)\s+"                                   # I-Node
+                                          r"([\d]*)\/?-?((?:.(?!\s{2,}))*[^\s])\s*"     # PID/Program name
+                                          r"(.*)"                                       # Path
+                                          , re.IGNORECASE),
+            },
+            "LINUX_SS" : {
+                "HEADER" : re.compile(r"Netid\s+State\s+Recv-Q\s+Send-Q\s+Local Address:Port\s+Peer Address:Port\s+Process", re.IGNORECASE),
+                "PARSER" : parse_linux_ss,
+                "FULL_MATCH" : re.compile(r"([a-z\d_\?]+)\s+"                                               # Netid
+                                          r"([-a-z\d_]+)\s+"                                                # State
+                                          r"([-\d]+)\s+"                                                    # Recv-Q
+                                          r"([-\d]+)\s+"                                                    # Send-Q
+                                          r"((?:\*)|(?:\[[a-f\d\:]+\])|(?:[\d\.]+)|(?:[-\._\d/a-z\*]+))"    # Local Address
+                                          r"\s?\:?((?:\*)|(?:\-?\d+))\s*"                                   # Port
+                                          r"((?:\*)|(?:\[[a-f\d\:]+\])|(?:[\d\.]+)|(?:[-\._\d/a-z\*]+))"    # Peer Address
+                                          r"\s?\:?((?:\*)|(?:\-?\d+))?\s*"                                  # Port
+                                          r"(.*)"                                                           # Process
+                                          , re.IGNORECASE),
+                "PID_MATCH" : re.compile(r"pid=(\d+)", re.IGNORECASE),
             },
             "WINDOWS_GP" : {
                 "HEADER" : re.compile(r"ProcessId\s+(Name\s+)CommandLine", re.IGNORECASE),
@@ -236,7 +268,9 @@ def parse_file(fin, host):
             (ftype, match_group) = guess_type(line)
         elif MATCHER.get("TYPE").get(ftype).get("PARSER")(host, line, match_group) is None:
             last_ftype = ftype
-            ftype = None
+            (ftype, match_group) = guess_type(line)
+            if ftype is None:
+                print(f"Failed to parse `{line}`")
     return ftype if last_ftype is None else last_ftype
 
 
@@ -245,7 +279,6 @@ def guess_type(line):
 
     for (m, r) in MATCHER.get("TYPE").items():
         if g := r.get("HEADER").match(line):
-            print(f"{m}")
             return (m, g)
     return (None, None)
 
@@ -253,7 +286,30 @@ def guess_type(line):
 def closed_states():
     ''' What to consider closed states '''
 
-    return ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing",)
+    return ("close_wait","closed","close","fin_wait_1","fin_wait1","fin_wait_2","fin_wait2","last_ack","timed_wait","time_wait","closing","unconn","closing",)
+
+
+def in_states():
+    ''' What to consider in states '''
+
+    return ("listening", "listen", "syn_received", "syn_recv",)
+
+
+def out_states():
+    ''' What to consider out states '''
+
+    return ("syn_send", "syn_sent",)
+
+
+def lowercase(val):
+    ''' Safe lowercase '''
+
+    try:
+        return val.lower()
+    except AttributeError:
+        pass
+
+    return val
 
 
 def shared_ps(value, host):
@@ -324,18 +380,18 @@ def shared_netstat(value, host):
         # Don't bother if the port isn't set up
         return False
 
-    if state in ("listening", "listen", "syn_received", "syn_recv") or remote_port in ("*", "0", "") or not is_ephemeral(local_port):
-        port_type += "_portin"
-    if state in ("syn_send", "syn_sent") or is_ephemeral(local_port):
-        port_type += "_portout"
-    value.update({"PORT_TYPE" : port_type})
-
     if local_port in ("*", ""):
         local_port = "0"
         value.update({"LOCAL_PORT" : local_port})
     if remote_port in ("*", ""):
         remote_port = "0"
         value.update({"REMOTE_PORT" : remote_port})
+
+    if state in in_states() or remote_port in ("*", "0", "") or not is_ephemeral(local_port):
+        port_type += "_portin"
+    if state in out_states() or is_ephemeral(local_port):
+        port_type += "_portout"
+    value.update({"PORT_TYPE" : port_type})
 
     if remote_host == "*":
         remote_host = ""
@@ -382,13 +438,13 @@ def parse_linux_ps(host, line, header_match):
     if matched is None:
         return None
 
-    uid = matched.group(1).lower()
-    pid = matched.group(2).lower()
-    ppid = matched.group(3).lower()
-    c = matched.group(4).lower()
-    stime = matched.group(5).lower()
-    tty = matched.group(6).lower()
-    time = matched.group(7).lower()
+    uid = lowercase(matched.group(1))
+    pid = lowercase(matched.group(2))
+    ppid = lowercase(matched.group(3))
+    c = lowercase(matched.group(4))
+    stime = lowercase(matched.group(5))
+    tty = lowercase(matched.group(6))
+    time = lowercase(matched.group(7))
     try:
         args = shlex.split(matched.group(8), posix=False)
         process = args[0]
@@ -421,17 +477,17 @@ def parse_linux_netstat(host, line, header_match):
     if matched is None:
         return None
 
-    proto = matched.group(1).lower()
-    recv_q = matched.group(2).lower()
-    send_q = matched.group(3).lower()
-    local_host = matched.group(4).lower()
-    local_port = matched.group(5).lower()
-    remote_host = matched.group(6).lower()
-    remote_port = matched.group(7).lower()
-    state = matched.group(8).lower()
-    pid = matched.group(9).lower()
+    proto = lowercase(matched.group(1))
+    recv_q = lowercase(matched.group(2))
+    send_q = lowercase(matched.group(3))
+    local_host = lowercase(matched.group(4))
+    local_port = lowercase(matched.group(5))
+    remote_host = lowercase(matched.group(6))
+    remote_port = lowercase(matched.group(7))
+    state = lowercase(matched.group(8))
+    pid = lowercase(matched.group(9))
     process = matched.group(10)
-    timer = matched.group(11).lower()
+    timer = lowercase(matched.group(11))
 
     new_val = {
         "PROTO" : proto,
@@ -451,6 +507,73 @@ def parse_linux_netstat(host, line, header_match):
 
     return matched
 
+def parse_linux_netstat_sockets(host, line, header_match):
+    ''' Match the socket part of a Linux netstat output '''
+
+    matched = MATCHER.get("TYPE").get("LINUX_NETSTAT_SOCKETS").get("FULL_MATCH").match(line)
+    if matched is None:
+        return None
+
+    # Skip interfaces for now
+
+    return matched
+
+
+def parse_linux_ss(host, line, header_match):
+    ''' Match a Linux ss output '''
+
+    matched = MATCHER.get("TYPE").get("LINUX_SS").get("FULL_MATCH").match(line)
+    if matched is None:
+        return None
+
+    proto = lowercase(matched.group(1))
+    state = lowercase(matched.group(2))
+    recv_q = lowercase(matched.group(3))
+    send_q = lowercase(matched.group(4))
+    local_host = lowercase(matched.group(5))
+    local_port = lowercase(matched.group(6))
+    remote_host = lowercase(matched.group(7))
+    remote_port = lowercase(matched.group(8))
+    proc = matched.group(9)
+
+    pids = []
+    if proc is not None:
+        pids = MATCHER.get("TYPE").get("LINUX_SS").get("PID_MATCH").findall(matched.group(9))
+
+    # Skip interfaces for now
+    if proto in ("nl","u_str","v_str","u_seq","u_dgr",):
+        return matched
+
+    if len(pids) == 0:
+        new_val = {
+            "PROTO" : proto,
+            "RECV_Q" : recv_q,
+            "SEND_Q" : send_q,
+            "LOCAL_HOST" : local_host,
+            "LOCAL_PORT" : local_port,
+            "REMOTE_HOST" : remote_host,
+            "REMOTE_PORT" : remote_port,
+            "STATE" : state,
+            "PID" : "",
+        }
+        shared_netstat(new_val, host)
+    else:
+        for pid in pids:
+            new_val = {
+                "PROTO" : proto,
+                "RECV_Q" : recv_q,
+                "SEND_Q" : send_q,
+                "LOCAL_HOST" : local_host,
+                "LOCAL_PORT" : local_port,
+                "REMOTE_HOST" : remote_host,
+                "REMOTE_PORT" : remote_port,
+                "STATE" : state,
+                "PID" : pid,
+            }
+            shared_netstat(new_val, host)
+
+    return matched
+
 
 def parse_windows_gp(host, line, header_match):
     ''' Match a Windows Get-CimInstance OR Get-WmiObject output '''
@@ -459,7 +582,7 @@ def parse_windows_gp(host, line, header_match):
     if matched is None:
         return None
 
-    pid = matched.group(1).lower()
+    pid = lowercase(matched.group(1))
     args = matched.group(2)
     process = args[0:len(header_match.group(1))].strip()
     args = args[len(header_match.group(1)):]
@@ -482,10 +605,10 @@ def parse_windows_ps(host, line, header_match):
     if matched is None:
         return None
 
-    uid = matched.group(1).lower()
-    pid = matched.group(2).lower()
-    ppid = matched.group(3).lower()
-    stime = matched.group(4).lower()
+    uid = lowercase(matched.group(1))
+    pid = lowercase(matched.group(2))
+    ppid = lowercase(matched.group(3))
+    stime = lowercase(matched.group(4))
     try:
         args = shlex.split(matched.group(5), posix=False)
         process = args[0]
@@ -515,13 +638,13 @@ def parse_windows_netstat(host, line, header_match):
     if matched is None:
         return None
 
-    proto = matched.group(1).lower()
-    local_host = matched.group(2).lower()
-    local_port = matched.group(3).lower()
-    remote_host = matched.group(4).lower()
-    remote_port = matched.group(5).lower()
-    state = matched.group(6).lower()
-    pid = matched.group(7).lower()
+    proto = lowercase(matched.group(1))
+    local_host = lowercase(matched.group(2))
+    local_port = lowercase(matched.group(3))
+    remote_host = lowercase(matched.group(4))
+    remote_port = lowercase(matched.group(5))
+    state = lowercase(matched.group(6))
+    pid = lowercase(matched.group(7))
 
     new_val = {
         "PROTO" : proto,
