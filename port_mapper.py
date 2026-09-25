@@ -264,7 +264,11 @@ def shared_ps(value, host):
     inv_users = GLOBALS.get("INV_USERS")
 
     pid = value.get("PID", "")
-    process = value.get("PROCESS", "")
+    if (process := value.get("PROCESS")) is None:
+        value.update({"PROCESS" : f"PID: {pid if pid != "" else "-1"}"})
+        process = value.get("PROCESS")
+    if value.get("ARGS") is None:
+        value.update({"ARGS" : ""})
     uid = value.get("UID", "")
 
     if "-" in pid:
