@@ -125,7 +125,7 @@ def setup(args):
         "LOCAL_IP" : re.compile(r"(\[*(?:(?:0+\.*\:*)+|"
                                r"(?:f+\.*\:*)+|"
                                r"(?:[\:\.0]+)1?|"
-                               r"(?:127\.0+\.0+\.1)"
+                               r"(?:127\.\d+\.\d+\.\d+)"
                                r")\]*)", re.IGNORECASE),
         "IPV6" : re.compile(r"([^\.*]+)", re.IGNORECASE),
         "TYPE" : {
@@ -320,7 +320,11 @@ def shared_ps(value, host):
     inv_users = GLOBALS.get("INV_USERS")
 
     pid = value.get("PID", "")
-    process = value.get("PROCESS", "")
+    if (process := value.get("PROCESS")) is None:
+        value.update({"PROCESS" : f"PID: {pid if pid != "" else "-1"}"})
+        process = value.get("PROCESS")
+    if value.get("ARGS") is None:
+        value.update({"ARGS" : ""})
     uid = value.get("UID", "")
 
     if "-" in pid:
@@ -441,9 +445,13 @@ def parse_linux_ps(host, line, header_match):
     stime = lowercase(matched.group(5))
     tty = lowercase(matched.group(6))
     time = lowercase(matched.group(7))
-    args = shlex.split(matched.group(8), posix=False)
-    process = args[0]
-    args = shlex.join(args[1:])
+    try:
+        args = shlex.split(matched.group(8), posix=False)
+        process = args[0]
+        args = shlex.join(args[1:])
+    except ValueError:
+        process = matched.group(8)
+        args = ""
 
     new_val = {
         "UID" : uid,
@@ -601,9 +609,13 @@ def parse_windows_ps(host, line, header_match):
     pid = lowercase(matched.group(2))
     ppid = lowercase(matched.group(3))
     stime = lowercase(matched.group(4))
-    args = shlex.split(matched.group(5), posix=False)
-    process = args[0]
-    args = shlex.join(args[1:])
+    try:
+        args = shlex.split(matched.group(5), posix=False)
+        process = args[0]
+        args = shlex.join(args[1:])
+    except ValueError:
+        process = matched.group(5)
+        args = ""
 
     new_val = {
         "UID" : uid,
