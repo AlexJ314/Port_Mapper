@@ -171,15 +171,15 @@ def setup(args):
             "LINUX_SS" : {
                 "HEADER" : re.compile(r"Netid\s+State\s+Recv-Q\s+Send-Q\s+Local Address:Port\s+Peer Address:Port\s+Process", re.IGNORECASE),
                 "PARSER" : parse_linux_ss,
-                "FULL_MATCH" : re.compile(r"([a-z\d_\?]+)\s+"                           # Netid
-                                          r"([-a-z\d_]+)\s+"                            # State   
-                                          r"([-\d]+)\s+"                                # Recv-Q
-                                          r"([-\d]+)\s+"                                # Send-Q
-                                          r"\[?([-\._\d/a-z\*\:]+)\]?"                  # Local Address
-                                          r"\s?\:?(\*?-?\d*)\s*"                        # Port
-                                          r"\[?([-\._\d/a-z\*\:]+)\]?"                  # Peer Address
-                                          r"\s?:?(\*?-?\d*)\s*"                         # Port
-                                          r"(.*)"                                       # Process
+                "FULL_MATCH" : re.compile(r"([a-z\d_\?]+)\s+"                                               # Netid
+                                          r"([-a-z\d_]+)\s+"                                                # State
+                                          r"([-\d]+)\s+"                                                    # Recv-Q
+                                          r"([-\d]+)\s+"                                                    # Send-Q
+                                          r"((?:\*)|(?:\[[a-f\d\:]+\])|(?:[\d\.]+)|(?:[-\._\d/a-z\*]+))"    # Local Address
+                                          r"\s?\:?((?:\*)|(?:\-?\d+))\s*"                                   # Port
+                                          r"((?:\*)|(?:\[[a-f\d\:]+\])|(?:[\d\.]+)|(?:[-\._\d/a-z\*]+))"    # Peer Address
+                                          r"\s?\:?((?:\*)|(?:\-?\d+))?\s*"                                  # Port
+                                          r"(.*)"                                                           # Process
                                           , re.IGNORECASE),
                 "PID_MATCH" : re.compile(r"pid=(\d+)", re.IGNORECASE),
             },
@@ -268,7 +268,9 @@ def parse_file(fin, host):
             (ftype, match_group) = guess_type(line)
         elif MATCHER.get("TYPE").get(ftype).get("PARSER")(host, line, match_group) is None:
             last_ftype = ftype
-            ftype = None
+            (ftype, match_group) = guess_type(line)
+            if ftype is None:
+                print(f"Failed to parse `{line}`")
     return ftype if last_ftype is None else last_ftype
 
 
@@ -277,7 +279,6 @@ def guess_type(line):
 
     for (m, r) in MATCHER.get("TYPE").items():
         if g := r.get("HEADER").match(line):
-            print(f"{m}")
             return (m, g)
     return (None, None)
 
