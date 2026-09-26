@@ -441,9 +441,13 @@ def shared_netstat(value, host):
 def shlex_splitter(string):
     ''' Splits a string on first whitespace while respecting quotes '''
 
-    s = shlex.shlex(string, posix=False)
-    process = s.get_token()
-    args = s.instream.read().strip()
+    try:
+        s = shlex.shlex(string, posix=False)
+        process = s.get_token()
+        args = s.instream.read().strip()
+    except ValueError:
+        process = string
+        args = ""
 
     return (process, args)
 
