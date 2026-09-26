@@ -415,6 +415,13 @@ def shared_netstat(value, host):
     if inv_states is not None and state in inv_states:
         return False
 
+    if value.get("PROTO") is None:
+        value.update({"PROTO" : ""})
+
+    if (MATCHER.get("IPV6").fullmatch(local_host) or MATCHER.get("IPV6").fullmatch(remote_host)) and "6" not in proto:
+        proto += "6"
+        value.update({"PROTO" : proto})
+
     if protos is not None and proto not in protos:
         return False
     if inv_protos is not None and proto in inv_protos:
@@ -541,7 +548,7 @@ def parse_linux_ss(host, line, header_match):
         pids = MATCHER.get("TYPE").get("LINUX_SS").get("PID_MATCH").findall(matched.group(9))
 
     # Skip interfaces for now
-    if proto in ("nl","u_str","v_str","u_seq","u_dgr",):
+    if proto in ("nl","u_str","v_str","u_seq","u_dgr","v_dgr",):
         return matched
 
     if len(pids) == 0:
