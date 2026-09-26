@@ -438,6 +438,16 @@ def shared_netstat(value, host):
     return True
 
 
+def shlex_splitter(string):
+    ''' Splits a string on first whitespace while respecting quotes '''
+
+    s = shlex.shlex(string, posix=False)
+    process = s.get_token()
+    args = s.instream.read().strip()
+
+    return (process, args)
+
+
 def parse_linux_ps(host, line, header_match):
     ''' Match a Linux ps output '''
 
@@ -452,13 +462,7 @@ def parse_linux_ps(host, line, header_match):
     stime = lowercase(matched.group(5))
     tty = lowercase(matched.group(6))
     time = lowercase(matched.group(7))
-    try:
-        args = shlex.split(matched.group(8), posix=False)
-        process = args[0]
-        args = shlex.join(args[1:])
-    except ValueError:
-        process = matched.group(8)
-        args = ""
+    (process, args) = shlex_splitter(matched.group(8))
 
     new_val = {
         "UID" : uid,
@@ -616,13 +620,7 @@ def parse_windows_ps(host, line, header_match):
     pid = lowercase(matched.group(2))
     ppid = lowercase(matched.group(3))
     stime = lowercase(matched.group(4))
-    try:
-        args = shlex.split(matched.group(5), posix=False)
-        process = args[0]
-        args = shlex.join(args[1:])
-    except ValueError:
-        process = matched.group(5)
-        args = ""
+    (process, args) = shlex_splitter(matched.group(5))
 
     new_val = {
         "UID" : uid,
@@ -800,12 +798,15 @@ def map_servers():
                 })
 
     if GLOBALS.get("PORTS_ONLY") or GLOBALS.get("INV_PORTS_ONLY"):
+        print("Removing unwanted processes")
         for hostname in list(SERVER.keys()):
             for pid in list((ps := SERVER.get(hostname).get("PS")).keys()):
                 if GLOBALS.get("PORTS_ONLY") and len(ps.get(pid).get("CONNECTIONS", [])) < 1 :
                     del ps[pid]
                 if GLOBALS.get("INV_PORTS_ONLY") and len(ps.get(pid).get("CONNECTIONS", [])) >= 1 :
                     del ps[pid]
+
+    print("Rearranging servers")
 
     # Map by server > process > args > connections
     #   Instead of server > pid > connections
